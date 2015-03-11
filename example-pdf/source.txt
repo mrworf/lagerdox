@@ -1,0 +1,2 @@
+land-contract-template1.pdf: http://www.tidyform.com/download/land-contract-template-1.html
+bill-of-sale.pdf : http://www.dmv.org/images/bill-of-sale.pdf
