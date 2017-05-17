@@ -1,3 +1,5 @@
+# Need to add string escape code
+#
 import sys
 import time
 import threading
@@ -73,9 +75,9 @@ class MariaDB:
       return False
 
     sql = [
-      'CREATE TABLE documents (id INT PRIMARY KEY AUTO_INCREMENT, category INT, scanned INT NOT NULL, received INT, pages INT NOT NULL)',
-      'CREATE TABLE pages (id INT NOT NULL, page INT NOT NULL, ocr BOOLEAN NOT NULL, blankness INT NOT NULL, degrees INT NOT NULL, confidence REAL NOT NULL, content TEXT NOT NULL, FULLTEXT INDEX (content), UNIQUE KEY page (page, id))',
-      'CREATE TABLE categories (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(128) NOT NULL, keywords VARCHAR(256) NOT NULL)',
+      'CREATE TABLE documents (id INT PRIMARY KEY AUTO_INCREMENT, category INT, scanned INT NOT NULL, received INT, pages INT NOT NULL, filename TEXT NOT NULL)',
+      'CREATE TABLE pages (id INT NOT NULL, page INT NOT NULL, ocr BOOLEAN NOT NULL, blankness INT NOT NULL, degrees INT NOT NULL, confidence REAL NOT NULL, content LONGTEXT NOT NULL, FULLTEXT INDEX (content), UNIQUE KEY page (page, id))',
+      'CREATE TABLE categories (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(128) NOT NULL, filter TEXT NOT NULL DEFAULT "")',
       'CREATE TABLE tags (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(128) NOT NULL)',
       'CREATE TABLE tagmap (tag INT NOT NULL, document INT NOT NULL, UNIQUE KEY tag (tag, document))'
     ]
@@ -95,16 +97,13 @@ class MariaDB:
     self.cnx.close()
 
   def prepare(self):
-    """
-    Loads up the cache and is now ready to be used (yes, this could be done by a join)
-    """
     return True
 
-  def add_document(self, category, scanned, received, pages):
-    query = 'INSERT INTO documents (category, scanned, received, pages) VALUES (%s, %s, %s, %s)'
+  def add_document(self, category, scanned, received, pages, filename):
+    query = 'INSERT INTO documents (category, scanned, received, pages, filename) VALUES (%s, %s, %s, %s, %s)'
     cursor = self.cnx.cursor(buffered=True)
     try:
-      cursor.execute(query, (category, scanned, received, pages))
+      cursor.execute(query, (category, scanned, received, pages, filename))
       self.cnx.commit()
       return cursor.lastrowid
     except mysql.connector.Error as err:
@@ -132,6 +131,8 @@ class MariaDB:
     try:
       cursor.execute(query)
       self.cnx.commit()
+      if cursor.rowcount != 1:
+        return False
       cursor.close()
       query = 'DELETE FROM pages WHERE id = %s' % document
       cursor = self.cnx.cursor(buffered=True)
@@ -149,11 +150,11 @@ class MariaDB:
       cursor.close()
     return False
 
-  def add_category(self, name, keywords):
-    query = 'INSERT INTO category (name, keywords) VALUES (%s, %s)'
+  def add_category(self, name, filter):
+    query = 'INSERT INTO categories (name, filter) VALUES (%s, %s)'
     cursor = self.cnx.cursor(buffered=True)
     try:
-      cursor.execute(query, (name, keywords))
+      cursor.execute(query, (name, filter))
       self.cnx.commit()
       return cursor.lastrowid
     except mysql.connector.Error as err:
@@ -162,20 +163,65 @@ class MariaDB:
       cursor.close()
     return None
 
-  def delete_category(self, id):
-    query = 'DELETE FROM category WHERE id = %d' % id
+  def set_category(self, id, name, filter):
+    if name is None and filter is None:
+      return True
+    query = 'UPDATE categories SET'
+    if name is not None:
+      query += ' name="%s"' % name
+    if filter is not None:
+      query += ' filter="%s"' % filter
+    query += ' WHERE id=%d' % id
     cursor = self.cnx.cursor(buffered=True)
     try:
-      cursor.execute(query, (name, keywords))
+      cursor.execute(query)
       self.cnx.commit()
+      return cursor.rowcount == 1
+    except mysql.connector.Error as err:
+      logging.exception('Failed to edit category: ' + repr(err));
+    finally:
+      cursor.close()
+    return False
+
+  def delete_category(self, id):
+    query = 'DELETE FROM categories WHERE id = %d' % id
+    cursor = self.cnx.cursor(buffered=True)
+    try:
+      cursor.execute(query)
+      self.cnx.commit()
+      if cursor.rowcount != 1:
+        return False
       cursor.close()
       query = 'UPDATE documents SET category = NULL WHERE id = %d' % id
       cursor = self.cnx.cursor(buffered=True)
-      cursor.execute(query, (name, keywords))
+      cursor.execute(query)
       self.cnx.commit()
       return True
     except mysql.connector.Error as err:
       logging.exception('Failed to delete category: ' + repr(err));
+    finally:
+      cursor.close()
+    return False
+
+  def assign_category(self, document, category):
+    # Check that there is such a category!
+    cursor = self.cnx.cursor(buffered=True)
+    try:
+      # Zero is allowed since it's no category
+      if category > 0:
+        query = 'SELECT id FROM categories WHERE id = %d' % category
+        cursor.execute(query)
+        self.cnx.commit()
+        if cursor.rowcount != 1:
+          return False
+      query = 'UPDATE documents SET category = %d WHERE id = %d' % (category, document)
+      cursor.execute(query)
+      self.cnx.commit()
+      if cursor.rowcount != 1:
+        return False
+      return True
+    except mysql.connector.Error as err:
+      logging.exception('Failed to update category: ' + repr(err));
     finally:
       cursor.close()
     return False
@@ -230,10 +276,26 @@ class MariaDB:
   def query_document(self, id):
     data = None
     result = self._query_with_iterator('SELECT * FROM documents WHERE id = %d' % id)
-    if result:
+    try:
       data = result.next()
       result.release()
+    except:
+      pass
     return data
+
+  def update_document(self, id, field, value):
+    cursor = self.cnx.cursor(dictionary=True, buffered=True)
+    query = 'UPDATE documents SET %s = %s WHERE id = %d' % (field, value, id)
+    try:
+      cursor.execute(query)
+      self.cnx.commit()
+    except mysql.connector.Error as err:
+      logging.exception('Query failed');
+      return False
+    finally:
+      cursor.close()
+    return True
+
 
   def query_pages(self, id):
     data = None
@@ -289,6 +351,12 @@ class Iterator:
     """
     return self.error
 
+  def __iter__(self):
+    return self
+
+  def __next__(self):
+    return self.next()
+
   def next(self):
     """
     Advances to the next record, returning current
@@ -297,8 +365,10 @@ class Iterator:
     If no more record exists, the function returns None
     """
     if self.error is not None:
-      return None
+      raise StopIteration
     rec = self.cursor.fetchone()
+    if rec is None:
+      raise StopIteration
     return rec
 
   def release(self):

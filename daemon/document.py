@@ -1,3 +1,11 @@
+"""
+Thoughts for improvement:
+- Extract the meta analytics to separate classes
+- Use NLTK (see http://www.nltk.org/book/ch06.html) to classify both categories and tags
+- Use threading to kick-off all meta & ocr logic at once (or at least X of them at a time) to leverage multiple CPU
+- Use threading for extracting PNGs (again, at least X threads)
+- The threading will work since it uses Popen
+"""
 import re
 import logging
 import threading
@@ -5,6 +13,7 @@ from subprocess import Popen, PIPE, STDOUT
 import os
 import time
 from Queue import Queue
+import shutil
 
 class Processor (threading.Thread):
   CMD_EXTRACT = 'convert -density 300 -depth 8 %(filename)s[%(page)d] %(workpath)s/page%(page)03d.png'
@@ -37,6 +46,10 @@ class Processor (threading.Thread):
     }
     self.uid = uid
     self.start()
+
+  def getState(self):
+    return self.state
+
 
   def _execute(self, cmdline, extras=None, manual=False):
     params = {
@@ -259,13 +272,14 @@ class Processor (threading.Thread):
     return True, page
 
 class Feeder (threading.Thread):
-  def __init__(self, dbconn, basedir):
+  def __init__(self, dbconn, basedir, destdir):
     threading.Thread.__init__(self)
     self.daemon = True
     self.stop = False
     self.queue = Queue()
     self.dbconn = dbconn
     self.basedir = basedir
+    self.destdir = destdir
     self.analzer = Analyzer()
     self.start()
 
@@ -281,12 +295,14 @@ class Feeder (threading.Thread):
 
   def process(self, uid, content):
     # Create a document first so we can feed it the pages
-    id = self.dbconn.add_document(0, int(time.time()), 0, content['pagelen'])
+    now = int(time.time())
+    fileandpath = self.copyfile(os.path.join(self.basedir, uid, content['file']))
+    id = self.dbconn.add_document(0, now, 0, content['pagelen'], fileandpath)
     if id is None:
       logging.error('Unable to add document')
       return
     else:
-      self.analzer.beginDate()
+      self.analzer.beginDate(now)
       for meta in content['metadata']:
         # Load the contents into memory
         data = self.loaddata(os.path.join(self.basedir, uid, 'page%03d.txt' % meta['page']))
@@ -296,11 +312,36 @@ class Feeder (threading.Thread):
           logging.debug('Adding page %d to document' % (meta['page']+1))
           self.dbconn.add_page(id, meta['page'], meta['ocr'], meta['blank-confidence'], meta['degree'], meta['degree-confidence'], data)
           self.analzer.updateDate(data)
+      date = self.analzer.finishDate()
+      if date is not None:
+        if not self.dbconn.update_document(id, 'received', str(date)):
+          logging.error('Unable to update received date on document')
+      self.cleanup(os.path.join(self.basedir, uid))
+
+  def cleanup(self, path):
+    shutil.rmtree(path)
+
+  def copyfile(self, filename):
+    folder = time.strftime('%Y-%m-%d')
+    path = os.path.join(self.destdir, folder)
+    if not os.path.exists(path):
+      os.makedirs(path)
+    t = time.strftime('%H.%M.%S')
+    c = 1
+    f = ''
+    while True:
+      f = os.path.join(path, '%s_document%d.pdf' % (t, c))
+      if not os.path.exists(f):
+        break
+      else:
+        c += 1
+    shutil.copy(filename, f)
+    return os.path.join(folder, '%s_document%d.pdf' % (t, c))
 
   def loaddata(self, filename):
     try:
       with open(filename, 'rb') as f:
-          return f.read()
+        return f.read()
     except:
       logging.exception('Failed to open "%s"' % filename)
     return None
@@ -372,12 +413,12 @@ class Analyzer:
         continue
 
       calctime = 0
-      if bits[0].isnumeric() and bits[1].isnumeric() and bits[2].isnumeric():
+      if bits[0].isdigit() and bits[1].isdigit() and bits[2].isdigit():
         # It's a completely numeric date. We're assuming it's a US date (MM DD YYYY)
         calctime = time.mktime((int(bits[2]), int(bits[0]), int(bits[1]), 0, 0, 0, 0, 0, -1))
-      elif bitsclean[0].isnumeric() and bitsclean[1].isnumeric() and bitsclean[2].isnumeric():
+      elif bitsclean[0].isdigit() and bitsclean[1].isdigit() and bitsclean[2].isdigit():
         calctime = time.mktime((int(bitsclean[2]), int(bitsclean[0]), int(bitsclean[1]), 0, 0, 0, 0, 0, -1))
-      elif bitsclean[0].isnumeric() and not bitsclean[1].isnumeric() and bitsclean[2].isnumeric():
+      elif bitsclean[0].isdigit() and not bitsclean[1].isdigit() and bitsclean[2].isdigit():
         # Uses text, assuming DD MMM(MMM) YYYY
         month = -1
         for i in range(0, len(self.MONTHS)):

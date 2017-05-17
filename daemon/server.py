@@ -90,7 +90,7 @@ elif result != Storage.VALIDATION_OK:
   sys.exit(1)
 
 database.prepare()
-#"""
+"""
 a = document.Analyzer()
 a.beginDate()
 
@@ -104,17 +104,18 @@ while True:
 i = a.finishDate()
 
 sys.exit(0)
-#"""
+"""
 
 """ Initialize the REST server """
 app = Flask(__name__)
 cors = CORS(app) # Needed to make us CORS compatible
 
 UPLOAD_FOLDER = '/tmp/lagerDox/'
+COMPLETE_FOLDER = '/tmp/lagerDox/done/'
 ALLOWED_EXTENSIONS = set(['pdf'])
 
 processList = {}
-feeder = document.Feeder(database, UPLOAD_FOLDER)
+feeder = document.Feeder(database, UPLOAD_FOLDER, COMPLETE_FOLDER)
 
 #app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024 # 64MB!
@@ -126,6 +127,16 @@ def handleResult(uid, content):
   logging.debug('%s finished with: %s' % (uid, repr(content)))
   for doc in content:
     feeder.add(uid, doc)
+  del processList[uid]
+
+def deleteDocument(filename):
+  thumbfolder = os.path.join(COMPLETE_FOLDER, filename) + '/'
+  document = os.path.join(COMPLETE_FOLDER, filename)
+  if os.path.exists(thumbfolder):
+    shutil.rmtree(thumbfolder)
+  if os.path.exists(document):
+    os.remove(document)
+  return True
 
 @app.route("/upload", methods=['POST'])
 def documentUpload():
@@ -154,6 +165,122 @@ def documentUpload():
       ret['uid'] = uid
       logging.info('New file received and stored in "%s"' % absfile)
       processList[uid] = document.Processor(uid, absfile, handleResult)
+
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+  else:
+    res.status_code = 200
+  return res
+
+@app.route("/status", methods=['GET'])
+def getStatus():
+  ret = {'jobs' : {} }
+  for p in processList:
+    ret['jobs'][p] = processList[p].getState()
+  res = jsonify(ret)
+  res.status_code = 200
+  return res
+
+@app.route("/document/<id>", methods=['GET','DELETE'])
+@app.route("/document/<id>/update", methods=['POST'])
+def documentDetails(id):
+  ret = {}
+  if request.method == 'GET':
+    doc = database.query_document(int(id))
+    if doc is None:
+      ret['error'] = 'No such document'
+    else:
+      ret = doc
+  elif request.method == 'DELETE':
+    # First, get info about the doc, since we need to delete it physically too
+    doc = database.query_document(int(id))
+    if doc is None:
+      ret['error'] = 'No such document'
+    else:
+      if database.delete_document(int(id)):
+        # Alright, delete the actual files too
+        if deleteDocument(doc['filename']):
+          ret['result'] = id
+        else:
+          ret['error'] = 'Database entry deleted but files remain'
+      else:
+        ret['error'] = 'No such document'
+  elif request.method == 'POST':
+    json = request.get_json()
+    if json is None:
+      ret['error'] = 'Invalid update request'
+    elif 'category' in json:
+      if database.assign_category(int(id), int(json['category'])):
+        ret['result'] = id
+      else:
+        ret['error'] = 'Unable to update category'
+    else:
+      ret['error'] = 'Invalid update request'
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+  else:
+    res.status_code = 200
+  return res
+
+@app.route("/document/<id>/<thumb>", methods=['GET'])
+def documentThumbnail(id, thumb):
+  pass
+
+@app.route('/category', methods=['PUT','DELETE'])
+def categoryEdit():
+  ret = {}
+  json = request.get_json()
+  if json is None or ('name' not in json and 'id' not in json):
+    ret['error'] = 'Invalid request, missing fields'
+  elif request.method == 'PUT':
+    id = None
+    if 'id' in json: # It's an update!
+      if database.set_category(json['id'], json.get('name', None), json.get('filter', None)):
+        id = json['id']
+    else:
+      id = database.add_category(json['name'], json.get('filter', '{}'))
+    if id is None:
+      ret['error'] = 'Unable to add/edit category'
+    else:
+      ret['result'] = id
+  elif request.method == 'DELETE':
+    id = None
+    if 'id' in json:
+      if database.delete_category(json['id']):
+        id = json['id']
+    if id is None:
+      ret['error'] = 'Unable to delete category'
+    else:
+      ret['result'] = id
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+  else:
+    res.status_code = 200
+  return res
+
+@app.route('/categories', methods=['GET'])
+def categoriesList():
+  ret = {'result' : []}
+
+  for entry in database.query_categories():
+    ret['result'].append(entry)
+
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+  else:
+    res.status_code = 200
+  return res
+
+@app.route("/documents", methods=['GET'])
+def documentList():
+  ret = {'result' : []}
+
+  for entry in database.query_documents():
+    ret['result'].append(entry)
 
   res = jsonify(ret)
   if 'error' in ret:
