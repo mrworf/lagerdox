@@ -21,6 +21,9 @@ class Processor (threading.Thread):
   CMD_SPLITTER = 'pdftk %(filename)s cat <pages> output %(dest)s'
   CMD_OCR_PAGE = 'tesseract %(workpath)s/page%(page)03d.png %(workpath)s/page%(page)03d -psm 1'
 
+  CMD_THUMB_SMALL = 'convert %(workpath)s/page%(page)03d.png -resize 155x200 -quality 85 %(workpath)s/small%(page)03d.jpg'
+  CMD_THUMB_LARGE = 'convert %(workpath)s/page%(page)03d.png -resize 620x800 -quality 85 %(workpath)s/large%(page)03d.jpg'
+
   CMD_META_DEGREE = 'tesseract %(workpath)s/page%(page)03d.png - -psm 0'
   CMD_META_BLANK1 = 'convert %(workpath)s/page%(page)03d.png -colorspace Gray -'
   CMD_META_BLANK2 = 'identify -format %%[standard-deviation]\\n%%[max]\\n%%[min]\\n -'
@@ -117,6 +120,8 @@ class Processor (threading.Thread):
         self.meta_blank(p, metadata)
         self.state['sub'] = 'OCR'
         self.ocrpage(p, metadata)
+        self.state['sub'] = 'THUMB'
+        self.thumb(p)
 
         data['metadata'].append(metadata)
       result.append(data)
@@ -124,6 +129,24 @@ class Processor (threading.Thread):
 
     self.state['overall'] = 'COMPLETE'
     return result
+
+  def thumb(self, page):
+    # Reuse pageXXX.png to produce viable thumbnails and avoid render PDF again
+    lines, result = self._execute(Processor.CMD_THUMB_SMALL, {'page' : page})
+    if result != 0:
+      logging.error('Failed to generate small thumb of page %d in "%s"' % (page, self.filepart))
+      lines = lines.split('\n')
+      for line in lines:
+        logging.error('>>> ' + line.strip())
+      return False
+
+    lines, result = self._execute(Processor.CMD_THUMB_LARGE, {'page' : page})
+    if result != 0:
+      logging.error('Failed to generate large thumb of page %d in "%s"' % (page, self.filepart))
+      lines = lines.split('\n')
+      for line in lines:
+        logging.error('>>> ' + line.strip())
+      return False
 
   def ocrpage(self, page, meta):
     meta['ocr'] = False
@@ -296,7 +319,7 @@ class Feeder (threading.Thread):
   def process(self, uid, content):
     # Create a document first so we can feed it the pages
     now = int(time.time())
-    fileandpath = self.copyfile(os.path.join(self.basedir, uid, content['file']))
+    fileandpath = self.copyfile(os.path.join(self.basedir, uid, content['file']), content['pagelen'])
     id = self.dbconn.add_document(0, now, 0, content['pagelen'], fileandpath)
     if id is None:
       logging.error('Unable to add document')
@@ -321,7 +344,8 @@ class Feeder (threading.Thread):
   def cleanup(self, path):
     shutil.rmtree(path)
 
-  def copyfile(self, filename):
+  def copyfile(self, filename, pages):
+    # First, the document itself
     folder = time.strftime('%Y-%m-%d')
     path = os.path.join(self.destdir, folder)
     if not os.path.exists(path):
@@ -336,6 +360,20 @@ class Feeder (threading.Thread):
       else:
         c += 1
     shutil.copy(filename, f)
+
+    # Next, copy all thumbnails
+    dstpath = os.path.join(self.destdir, folder, '%s_document%d' % (t, c))
+    srcpath = os.path.dirname(filename)
+    if not os.path.exists(dstpath):
+      os.makedirs(dstpath)
+    for p in range(0, pages):
+      src = os.path.join(srcpath, 'small%03d.jpg' % p)
+      dst = os.path.join(dstpath, 'small%03d.jpg' % p)
+      shutil.copy(src, dst)
+      src = os.path.join(srcpath, 'large%03d.jpg' % p)
+      dst = os.path.join(dstpath, 'large%03d.jpg' % p)
+      shutil.copy(src, dst)
+
     return os.path.join(folder, '%s_document%d.pdf' % (t, c))
 
   def loaddata(self, filename):

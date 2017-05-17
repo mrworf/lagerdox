@@ -48,7 +48,7 @@ from tornado.ioloop import IOLoop
 from tornado.web import Application, FallbackHandler
 from tornado.websocket import WebSocketHandler
 
-from flask import Flask, jsonify, Response, request, redirect, url_for
+from flask import Flask, jsonify, Response, request, redirect, url_for, send_file
 from werkzeug.utils import secure_filename
 import threading
 import Queue
@@ -224,9 +224,24 @@ def documentDetails(id):
     res.status_code = 200
   return res
 
-@app.route("/document/<id>/<thumb>", methods=['GET'])
+@app.route("/document/<id>/small/<thumb>", methods=['GET'])
+@app.route("/document/<id>/large/<thumb>", methods=['GET'])
 def documentThumbnail(id, thumb):
-  pass
+  doc = database.query_document(int(id))
+  if doc is None or int(thumb) >= doc['pages']:
+    ret = {'error' : 'Invalid document or page'}
+  elif '/small/' in request.path:
+    filename = os.path.join(COMPLETE_FOLDER, doc['filename'][:-4], 'small%003d.jpg' % int(thumb))
+    return send_file(filename)
+  elif '/large/' in request.path:
+    filename = os.path.join(COMPLETE_FOLDER, doc['filename'][:-4], 'large%003d.jpg' % int(thumb))
+    return send_file(filename)
+  else:
+    ret = {'error' : 'Invalid thumb type'}
+  res = jsonify(ret)
+  res.status_code = 500
+  return res
+
 
 @app.route('/category', methods=['PUT','DELETE'])
 def categoryEdit():

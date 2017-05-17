@@ -278,7 +278,6 @@ class MariaDB:
     result = self._query_with_iterator('SELECT * FROM documents WHERE id = %d' % id)
     try:
       data = result.next()
-      result.release()
     except:
       pass
     return data
