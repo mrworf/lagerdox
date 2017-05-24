@@ -1,0 +1,30 @@
+div.document_item {
+  border: 1px solid black;
+  padding: 10px;
+  height: 200px;
+  width: 320px;
+  display: inline-block;
+  vertical-align: top;
+  overflow: hidden;
+  margin: 2px;
+  white-space: nowrap;;
+}
+
+div.document_item img {
+  float: left;
+  border: 1px solid black;
+  max-width: 155px;
+  max-height: 200px;
+  margin: auto auto;
+}
+
+div.document_item div {
+  display: inline-block;
+  vertical-align: top;
+  padding-left: 10px;
+  height: 100%;
+}
+
+div.document img {
+  border: 1px solid black;
+}

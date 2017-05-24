@@ -1,0 +1,9 @@
+<div class="status">
+  {{#each jobs}}
+    State: {{overall}} {{#lt files 1}}(document is split, contains {{rebase files 1}} documents){{/lt}}<br>
+    {{#if pages}}Page {{rebase 1 page}} of {{pages}}: {{sub}}{{/if}}
+    <hr>
+  {{else}}
+  idle!
+  {{/each}}
+</div>

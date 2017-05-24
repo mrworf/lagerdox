@@ -1,0 +1,17 @@
+{{#each items}}
+<div class="document_item">
+  <a href="?section=documents&view={{id}}">
+    <img src="http://{{../server}}:7000/document/{{id}}/small/0" />
+  </a>
+  <div class="document_info">
+    {{#if scanned}}Added {{dtos scanned}}<br>{{/if}}
+    {{#if received}}Dated {{dtos received}}<br>{{/if}}
+    {{#if category}}{{category.name}}<br>{{/if}}
+    {{#if tags}}{{#each tags}}{{name}} {{/each}}<br>{{/if}}
+    <hr>
+    Pages {{pages}}<br>
+    <hr>
+    <button id="item_delete" data-id="{{id}}">Delete</button>
+  </div>
+</div>
+{{/each}}

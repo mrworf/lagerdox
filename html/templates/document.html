@@ -1,0 +1,15 @@
+<div class="document">
+  <div class="document_info">
+    {{#if scanned}}Added {{dtos scanned}}<br>{{/if}}
+    {{#if received}}Dated {{dtos received}}<br>{{/if}}
+    {{#if category}}{{category.name}}<br>{{/if}}
+    {{#if tags}}{{#each tags}}{{name}} {{/each}}<br>{{/if}}
+    <hr>
+    Pages {{pages}}<br>
+    <hr>
+    <button id="item_delete" data-id="{{id}}">Delete</button>
+  </div>
+  {{#loop pages}}
+    <img src="http://{{../server}}:7000/document/{{../id}}/large/{{this}}" title="Page {{rebase this 1}} of {{../pages}}"/>
+  {{/loop}}
+</div>
