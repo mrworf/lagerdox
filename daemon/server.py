@@ -183,7 +183,7 @@ def getStatus():
   return res
 
 @app.route("/document/<id>", methods=['GET','DELETE'])
-@app.route("/document/<id>/update", methods=['POST'])
+@app.route("/document/<id>/update", methods=['POST', 'DELETE'])
 def documentDetails(id):
   ret = {}
   if request.method == 'GET':
@@ -193,19 +193,31 @@ def documentDetails(id):
     else:
       ret = doc
   elif request.method == 'DELETE':
-    # First, get info about the doc, since we need to delete it physically too
-    doc = database.query_document(int(id))
-    if doc is None:
-      ret['error'] = 'No such document'
-    else:
-      if database.delete_document(int(id)):
-        # Alright, delete the actual files too
-        if deleteDocument(doc['filename']):
+    if request.path.endswith('/update'):
+      json = request.get_json()
+      if json is None:
+        ret['error'] = 'Invalid delete request'
+      elif 'tag' in json:
+        if database.remove_tag(int(id), int(json['tag'])):
           ret['result'] = id
         else:
-          ret['error'] = 'Database entry deleted but files remain'
+          ret['error'] = 'Unable to remove tag'
       else:
+        ret['error'] = 'Invalid update request'
+    else:
+      # First, get info about the doc, since we need to delete it physically too
+      doc = database.query_document(int(id))
+      if doc is None:
         ret['error'] = 'No such document'
+      else:
+        if database.delete_document(int(id)):
+          # Alright, delete the actual files too
+          if deleteDocument(doc['filename']):
+            ret['result'] = id
+          else:
+            ret['error'] = 'Database entry deleted but files remain'
+        else:
+          ret['error'] = 'No such document'
   elif request.method == 'POST':
     json = request.get_json()
     if json is None:
@@ -215,6 +227,11 @@ def documentDetails(id):
         ret['result'] = id
       else:
         ret['error'] = 'Unable to update category'
+    elif 'tag' in json:
+      if database.assign_tag(int(id), int(json['tag'])):
+        ret['result'] = id
+      else:
+        ret['error'] = 'Unable to add tag'
     else:
       ret['error'] = 'Invalid update request'
   res = jsonify(ret)
@@ -242,13 +259,12 @@ def documentThumbnail(id, thumb):
   res.status_code = 500
   return res
 
-
 @app.route('/category', methods=['PUT','DELETE'])
 def categoryEdit():
   ret = {}
   json = request.get_json()
   if json is None or ('name' not in json and 'id' not in json):
-    ret['error'] = 'Invalid request, missing fields'
+    ret['error'] = 'Invalid request, missing fields, got:' + repr(json)
   elif request.method == 'PUT':
     id = None
     if 'id' in json: # It's an update!
@@ -272,6 +288,7 @@ def categoryEdit():
   res = jsonify(ret)
   if 'error' in ret:
     res.status_code = 500
+    logging.error('%s failed: %s' % (request.path, ret['error']))
   else:
     res.status_code = 200
   return res
@@ -297,6 +314,53 @@ def documentList():
   for entry in database.query_documents():
     ret['result'].append(entry)
 
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+  else:
+    res.status_code = 200
+  return res
+
+@app.route("/tags", methods=['GET'])
+def tagList():
+  ret = {'result' : []}
+
+  for entry in database.query_tags():
+    ret['result'].append(entry)
+
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+  else:
+    res.status_code = 200
+  return res
+
+@app.route('/tag', methods=['PUT','DELETE'])
+def tagEdit():
+  ret = {}
+  json = request.get_json()
+  if json is None or ('name' not in json and 'id' not in json):
+    ret['error'] = 'Invalid request, missing fields'
+  elif request.method == 'PUT':
+    id = None
+    if 'id' in json: # It's an update!
+      if database.set_tag(json['id'], json.get('name')):
+        id = json['id']
+    else:
+      id = database.add_tag(json['name'])
+    if id is None:
+      ret['error'] = 'Unable to add/edit tag'
+    else:
+      ret['result'] = id
+  elif request.method == 'DELETE':
+    id = None
+    if 'id' in json:
+      if database.delete_tag(json['id']):
+        id = json['id']
+    if id is None:
+      ret['error'] = 'Unable to delete tag'
+    else:
+      ret['result'] = id
   res = jsonify(ret)
   if 'error' in ret:
     res.status_code = 500

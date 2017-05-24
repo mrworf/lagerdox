@@ -16,7 +16,7 @@ from Queue import Queue
 import shutil
 
 class Processor (threading.Thread):
-  CMD_EXTRACT = 'convert -density 300 -depth 8 %(filename)s[%(page)d] %(workpath)s/page%(page)03d.png'
+  CMD_EXTRACT = 'convert -density 300 -depth 8 %(filename)s[%(page)d] -background white -flatten %(workpath)s/page%(page)03d.png'
   CMD_MULTIPLE = 'zbarimg %(workpath)s/page%(page)03d.png'
   CMD_SPLITTER = 'pdftk %(filename)s cat <pages> output %(dest)s'
   CMD_OCR_PAGE = 'tesseract %(workpath)s/page%(page)03d.png %(workpath)s/page%(page)03d -psm 1'
@@ -40,7 +40,7 @@ class Processor (threading.Thread):
     self.workpath = os.path.dirname(filename)
     self.filepart = os.path.basename(filename)
     self.state = {
-      'overall' : 'INIT',
+      'overall' : 'PENDING',
       'files' : 0,
       'pages' : 0,
       'file' : 0,
@@ -186,8 +186,8 @@ class Processor (threading.Thread):
 
   def meta_degree(self, page, meta):
     '''Detects orientation of page'''
-    meta['degree'] = None
-    meta['degree-confidence'] = None
+    meta['degree'] = 0
+    meta['degree-confidence'] = 0
     lines, result = self._execute(Processor.CMD_META_DEGREE, {'page' : page})
     if lines:
       for line in lines.split('\n'):
@@ -331,10 +331,11 @@ class Feeder (threading.Thread):
         data = self.loaddata(os.path.join(self.basedir, uid, 'page%03d.txt' % meta['page']))
         if not data:
           logging.error('No data found for page %d' % meta['page'])
-        else:
-          logging.debug('Adding page %d to document' % (meta['page']+1))
-          self.dbconn.add_page(id, meta['page'], meta['ocr'], meta['blank-confidence'], meta['degree'], meta['degree-confidence'], data)
-          self.analzer.updateDate(data)
+          data = ''
+        logging.debug('Adding page %d to document' % (meta['page']+1))
+        self.dbconn.add_page(id, meta['page'], meta['ocr'], meta['blank-confidence'], meta['degree'], meta['degree-confidence'], data)
+        self.analzer.updateDate(data)
+
       date = self.analzer.finishDate()
       if date is not None:
         if not self.dbconn.update_document(id, 'received', str(date)):
