@@ -54,6 +54,12 @@ LagerDoxClient = function() {
     }, errorFunction);
   }
 
+  this.getTag = function(id, resultFunction, errorFunction) {
+    this.execServer('/tag/' + id, function(result) {
+      resultFunction(result);
+    }, errorFunction);
+  }
+
   this.getStatus = function(resultFunction, errorFunction) {
     this.execServer('/status', function(result) {
       resultFunction(result);
@@ -62,6 +68,12 @@ LagerDoxClient = function() {
 
   this.getCategories = function(resultFunction, errorFunction) {
     this.execServer('/categories', function(result) {
+      resultFunction(result);
+    }, errorFunction);
+  }
+
+  this.getCategory = function(id, resultFunction, errorFunction) {
+    this.execServer('/category/' + parseInt(id), function(result) {
       resultFunction(result);
     }, errorFunction);
   }
@@ -78,16 +90,60 @@ LagerDoxClient = function() {
     this.execServer('/category', resultFunction, errorFunction, 'PUT', {'name':name,'filter':filter});
   }
 
+  this.editCategory = function(id, name, filter, resultFunction, errorFunction) {
+    this.execServer('/category/' + id, resultFunction, errorFunction, 'PUT', {'name':name,'filter':filter});
+  }
+
   this.deleteCategory = function(id, resultFunction, errorFunction) {
-    this.execServer('/category', resultFunction, errorFunction, 'DELETE', {'id':id});
+    this.execServer('/category/' + id, resultFunction, errorFunction, 'DELETE');
   }
 
   this.deleteTag = function(id, resultFunction, errorFunction) {
-    this.execServer('/tag', resultFunction, errorFunction, 'DELETE', {'id':id});
+    this.execServer('/tag/' + id, resultFunction, errorFunction, 'DELETE');
   }
 
   this.addTag = function(name, resultFunction, errorFunction) {
     this.execServer('/tag', resultFunction, errorFunction, 'PUT', {'name':name});
+  }
+
+  this.editTag = function(id, name, resultFunction, errorFunction) {
+    this.execServer('/tag/' + id, resultFunction, errorFunction, 'PUT', {'name':name});
+  }
+
+  this.getPageContent = function(id, page, resultFunction, errorFunction) {
+    this.execServer('/document/' + id + '/page/' + page, resultFunction, errorFunction);
+  }
+
+  this.assignCategory = function(doc, cat, resultFunction, errorFunction) {
+    this.execServer('/document/' + doc + '/category/' + cat, resultFunction, errorFunction, 'PUT');
+  }
+
+  this.removeCategory = function(doc, resultFunction, errorFunction) {
+    this.execServer('/document/' + doc + '/category', resultFunction, errorFunction, 'DELETE');
+  }
+
+  this.assignTag = function(doc, tag, resultFunction, errorFunction) {
+    this.execServer('/document/' + doc + '/tag/' + tag, resultFunction, errorFunction, 'PUT');
+  }
+
+  this.removeTag = function(doc, tag, resultFunction, errorFunction) {
+    this.execServer('/document/' + doc + '/tag/' + tag, resultFunction, errorFunction, 'DELETE');
+  }
+
+  this.clearTags = function(doc, resultFunction, errorFunction) {
+    this.execServer('/document/' + doc + '/tag', resultFunction, errorFunction, 'DELETE');
+  }
+
+  this.search = function(text, resultFunction, errorFunction) {
+    this.execServer('/search', function (result) {
+      for (var i in result['result']) {
+        if ('received' in result['result'][i] && result['result'][i]['received'] > 0)
+          result[i]['received'] = new Date(result['result'][i]['received']*1000);
+        if ('scanned' in result['result'][i] && result['result'][i]['scanned'] > 0)
+          result['result'][i]['scanned'] = new Date(result['result'][i]['scanned']*1000);
+      }
+      resultFunction(result);
+    }, errorFunction, 'POST', {'text':text});
   }
 }
 
@@ -95,16 +151,22 @@ $( document ).ready(function() {
   client = new LagerDoxClient();
 
   function showDocs() {
-    history.pushState(null, "upload", "?section=documents");
+    history.replaceState(null, "upload", "?section=documents");
     $('#content').empty();
     client.getDocuments(function(obj) {
       var comp = Handlebars.getTemplate('document_list');
       $('#content').html(comp({'server' : 'magi.sfo.sensenet.nu', 'items' : obj['result']}));
-
       $('.document_item').on('click', '#item_delete', function(e) {
         deleteDoc(e.target.dataset.id, function() { $(e.delegateTarget).remove(); });
       });
+      $('.document_item').on('click', '#item_download', function(e) {
+        downloadDoc(e.target.dataset.id);
+      });
     });
+  }
+
+  function downloadDoc(id) {
+    window.location.href="http://magi.sfo.sensenet.nu:7000/document/" + id + "/download";
   }
 
   function deleteDoc(id, success) {
@@ -116,34 +178,82 @@ $( document ).ready(function() {
     }
   }
 
-  function deleteCategory(obj) {
+  function deleteCategory(id, success) {
     if (confirm('Are you sure you want to delete this category? It cannot be undone!')) {
-      client.deleteCategory(obj['id'], function(result) {
-        console.log('deleting the category from display, id = ' + obj['item']);
-        $('#cat' + obj['item']).remove();
+      client.deleteCategory(id, function(result) {
+        if (success)
+          success();
       });
     }
   }
 
-  function deleteTag(obj) {
+  function deleteTag(id, success) {
     if (confirm('Are you sure you want to delete this tag? It cannot be undone!')) {
-      client.deleteTag(obj['id'], function(result) {
-        console.log('deleting the tag from display, id = ' + obj['item']);
-        $('#tag' + obj['item']).remove();
+      client.deleteTag(id, function(result) {
+        if (success)
+          success();
       });
     }
   }
 
   function showDoc(id) {
-    history.pushState(null, "upload", "?section=documents&view=" + id);
+    history.replaceState(null, "upload", "?section=documents&view=" + id);
     $('#content').empty();
     client.getDocument(id, function(obj) {
       var comp = Handlebars.getTemplate('document');
       obj['server'] = 'magi.sfo.sensenet.nu';
       $('#content').html(comp(obj));
-
-      $('.document').on('click', '#item_delete', function(e) {
+      $('#item_delete').on('click', function(e) {
         deleteDoc(e.target.dataset.id, function() { showDocs(); });
+      });
+      $('#item_download').on('click', function(e) {
+        downloadDoc(e.target.dataset.id);
+      });
+      $('#item_category').on('click', function(e) {
+        var comp = Handlebars.getTemplate('category_selectbox');
+        var doc = e.target.dataset.id;
+        client.getCategories(function(result) {
+          $('#item_category').replaceWith(comp(result));
+          $('#category_selectbox').on('change', function(e) {
+            var cat = $(e.target).val();
+            if (cat != "") {
+              client.assignCategory(doc, cat, function() {
+                showDoc(doc);
+              });
+            } else {
+              client.removeCategory(doc, function() {
+                showDoc(doc);
+              });
+            }
+          });
+        });
+      });
+      $('#item_tag').on('click', function(e) {
+        var comp = Handlebars.getTemplate('tag_selectbox');
+        var doc = e.target.dataset.id;
+        client.getTags(function(result) {
+          $('#item_tag').replaceWith(comp(result));
+          $('#tag_selectbox').on('change', function(e) {
+            var tag = $(e.target).val();
+            if (tag != "") {
+              client.assignTag(doc, tag, function() {
+                showDoc(doc);
+              });
+            } else
+              showDoc(doc);
+          });
+        });
+      });
+      $('.document_info').on('click', '#tag_delete', function(e) {
+        client.removeTag(e.target.dataset.id, e.target.dataset.tag, function(result) {
+          $(e.target).remove();
+        });
+      });
+      $('.page').on('click', 'img', function(e) {
+        client.getPageContent(e.target.dataset.id, e.target.dataset.page, function(result) {
+          console.log(e);
+          $(e.delegateTarget).html('<pre>' + result['result'] + '</pre>');
+        });
       });
     }, function() {
       showDocs();
@@ -151,29 +261,45 @@ $( document ).ready(function() {
   }
 
   function showTags() {
-    history.pushState(null, "upload", "?section=tags");
+    history.replaceState(null, "upload", "?section=tags");
     $('#content').empty();
     client.getTags(function(obj) {
-      for (var d in obj["result"]) {
-        tag = obj["result"][d];
-        console.log(tag);
+      var comp = Handlebars.getTemplate('tags');
+      $('#content').html(comp(obj));
+      $('.tag').on('click', '#tag_edit', function(e) {
+        client.getTag(e.target.dataset.id, function(result) {
+          $('#add').hide();
 
-        var element = '<div id="tag' + d + '">';
-        element += '<button id="del' + d + '">Delete</button>';
-        element += tag['name'];
-        element += '</div>';
-        $('#content').append(element);
-        $('#del'+d).bind('click', {'id':tag['id'], "item":d}, function(event) { deleteTag(event.data); });
+          $('#name').val(result['result']['name']);
+          $('#name').data('org', $('#name').val());
 
-      }
-      element = '<input type="text" id="name"><button type="button" id="add">Add</button>';
-      $('#content').append(element);
-      $('#add').click(function() {
-        var name = $('#name').val().trim();
-        if (name == '')
-          alert('Name field is empty, cannot add tag');
-        else {
-          client.addTag(name, function(result) {
+          $('#save').data('id', result['result']['id']);
+          $('#save').show();
+        });
+      });
+      $('.tag').on('click', '#tag_delete', function(e) {
+        deleteTag(e.target.dataset.id, function() { e.delegateTarget.remove(); });
+      });
+      $('#add').on('click', function(e) {
+        if ($('#name').val().trim() == '') {
+          alert('No name provided');
+        } else {
+          client.addTag($('#name').val(), function(result) {
+            showTags();
+          });
+        }
+      });
+      $('#save').on('click', function(e) {
+        if ($('#name').val().trim() == '') {
+          alert('No name provided');
+        } else if ($('#name').val().trim() == $('#name').data('org')) {
+          showTags();
+        } else if ($('#save').data('id') == undefined) {
+          console.log('Target is undefined');
+          console.log(e);
+          showTags();
+        } else {
+          client.editTag($('#save').data('id'), $('#name').val(), function(result) {
             showTags();
           });
         }
@@ -181,29 +307,14 @@ $( document ).ready(function() {
     });
   }
 
+
   function showStatus() {
-    history.pushState(null, "upload", "?section=status");
+    if ($('.status').length)
+      return;
+
+    history.replaceState(null, "upload", "?section=status");
     $('#content').empty();
-
     var comp = Handlebars.getTemplate('status');
-
-    /**
-      'overall' : 'INIT',
-      'files' : 0,
-      'pages' : 0,
-      'file' : 0,
-      'page' : 0,
-      'sub' : ''
-    */
-    var element = '<span id="statusbox">'
-    element += 'Status: <span id="status_overall"></span><br/>';
-    element += 'Documents: <span id="status_pending"></span><br/>';
-    element += '<hR>';
-    element += 'Current document:<br>';
-    element += 'Processing sub document <span id="status_file"></span> of <span id="status_files"></span><br/>';
-    element += 'Processing page <span id="status_page"></span> of <span id="status_pages"></span><br/>';
-    element += 'Current step: <span id="status_step"></span><br/>';
-    '</span>';
     $('#content').html('<div class="status"></div>');
     refreshStatus(comp);
   }
@@ -212,80 +323,73 @@ $( document ).ready(function() {
     client.getStatus(function(obj) {
       if ($('.status').length) {
         $('#content').html(comp(obj));
-        /*
-        if ($.isEmptyObject(obj['jobs'])) {
-          $('#status_pending').text('0');
-          $('#status_overall').text('IDLE');
-          $('#status_file').text('0');
-          $('#status_files').text('0');
-          $('#status_page').text('0');
-          $('#status_pages').text('0');
-          $('#status_step').text('');
-        } else {
-          // Find active one
-          var c = 0;
-          for (var k in obj['jobs']) {
-            c++;
-            if (obj['jobs'][k]['overall'] != 'PENDING') {
-              $('#status_overall').text(obj['jobs'][k]['overall']);
-              if (obj['jobs'][k]['files'] == 0) {
-                $('#status_file').text('N/A');
-                $('#status_files').text('N/A');
-              } else {
-                $('#status_file').text(obj['jobs'][k]['file']+1);
-                $('#status_files').text(obj['jobs'][k]['files']);
-              }
-              $('#status_page').text(obj['jobs'][k]['page']+1);
-              $('#status_pages').text(obj['jobs'][k]['pages']);
-              $('#status_step').text(obj['jobs'][k]['sub']);
-              break;
-            }
-          }
-          $('#status_pending').text("" + c);
-        }
-        */
         setTimeout(function() { refreshStatus(comp); }, 1000);
       }
     });
   }
 
   function showCategories() {
-    history.pushState(null, "upload", "?section=category");
+    history.replaceState(null, "upload", "?section=categories");
     $('#content').empty();
     client.getCategories(function(obj) {
-      var element = '';
-      for (var d in obj["result"]) {
-        cat = obj["result"][d];
+      var comp = Handlebars.getTemplate('categories');
+      $('#content').html(comp(obj));
+      $('.category').on('click', '#category_edit', function(e) {
+        client.getCategory(e.target.dataset.id, function(result) {
+          $('#add').hide();
 
-        element  = '<div id="cat' + d + '">';
-        element += '<button id="del' + d + '">Delete</button>';
-        element += cat['name'];
-        element += cat['filter'];
-        element += '</div>';
-        $('#content').append(element);
-        $('#del'+d).bind('click', {'id': cat['id'], 'item':d}, function(event) { deleteCategory(event.data); });
-      }
-      element = '<input id="name" type="text"><input id="filter" type="text"><button type="button" id="add">Add category</button>';
-      $('#content').append(element);
-      $('#add').on('click', function() {
-        if ($('#name').val().trim() == '')
+          $('#name').val(result['result']['name']);
+          $('#name').data('org', $('#name').val());
+
+          var data = JSON.parse(result['result']['filter']);
+          var keys = '';
+          if ('keywords' in data) {
+            for (var e in data['keywords']) {
+              keys += ' ' + data['keywords'][e];
+            }
+          }
+          $('#keywords').val(keys.trim());
+          $('#keywords').data('org', $('#keywords').val());
+
+          $('#save').data('id', result['result']['id']);
+          $('#save').show();
+        });
+      });
+      $('.category').on('click', '#category_delete', function(e) {
+        deleteCategory(e.target.dataset.id, function() { e.delegateTarget.remove(); });
+      });
+      $('#add').on('click', function(e) {
+        if ($('#name').val().trim() == '') {
           alert('No name provided');
-        else
-          client.addCategory($('#name').val(), JSON.stringify({'keywords':$('#filter').val().split(/\s+/)}), function(result) {
+        } else {
+          client.addCategory($('#name').val(), JSON.stringify({'keywords':$('#keywords').val().split(/\s+/)}), function(result) {
             showCategories();
           });
+        }
+      });
+      $('#save').on('click', function(e) {
+        if ($('#name').val().trim() == '') {
+          alert('No name provided');
+        } else if ($('#name').val().trim() == $('#name').data('org') && $('#keywords').val().trim() == $('#keywords').data('org')) {
+          showCategories();
+        } else if ($('#save').data('id') == undefined) {
+          console.log('Target is undefined');
+          console.log(e);
+          showCategories();
+        } else {
+          client.editCategory($('#save').data('id'), $('#name').val(), JSON.stringify({'keywords':$('#keywords').val().split(/\s+/)}), function(result) {
+            showCategories();
+          });
+        }
       });
     });
   }
 
   function showUpload() {
-    history.pushState(null, "upload", "?section=upload");
+    history.replaceState(null, "upload", "?section=upload");
     $('#content').empty();
-    var element = '<span>File</span>';
-    element += '<input type="file" id="file" name="file" data-url="http://magi.sfo.sensenet.nu:7000/upload" multiple/><br/>';
-    element += '<div id="progress"><div class="bar" style="width: 0%;"></div></div>';
-
-    $('#content').append(element);
+    var comp = Handlebars.getTemplate('upload');
+    $('#content').html(comp({'server':'magi.sfo.sensenet.nu:7000'}));
     $('#file').fileupload({
       progressall: function (e, data) {
         var progress = parseInt(data.loaded / data.total * 100, 10);
@@ -293,16 +397,45 @@ $( document ).ready(function() {
           'width',
           progress + '%'
         );
+        if (data.loaded == data.total) {
+          showStatus();
+        }
       },
-      done: function (e, data) {
-        showStatus();
-        /*
-        $.each(data.result.files, function (index, file) {
-            $('#content').append(file.name);
-        });
-        */
+    });
+  }
+
+  function showSearch() {
+    var q = getUrlParameter('q');
+    if (q != null) {
+      history.replaceState(null, "search", "?section=search&q=" + encodeURIComponent(q));
+    } else {
+      history.replaceState(null, "search", "?section=search");
+    }
+    $('#content').empty();
+    var comp = Handlebars.getTemplate('search');
+    $('#content').html(comp());
+    $('#query').val(q);
+    search(q);
+
+    $('#query').on('keypress', function(event) {
+      if(event.keyCode == 13) { // 13 = Enter Key
+        search($('#query').val());
       }
     });
+
+    $('#search').on('click', function() {
+      search($('#query').val());
+    });
+  }
+
+  function search(query) {
+    history.replaceState(null, "search", "?section=search&q=" + encodeURIComponent(query));
+    $('#results').empty();
+    client.search(query, function(result) {
+      console.log(result);
+      var comp = Handlebars.getTemplate('search_result');
+      $('#results').html(comp({'server' : 'magi.sfo.sensenet.nu', 'items' : result['result']}));
+    })
   }
 
   function getUrlParameter(sParam) {
@@ -355,6 +488,9 @@ $( document ).ready(function() {
 
   section = getUrlParameter("section");
   switch (section) {
+    case 'search':
+      showSearch();
+      break;
     case 'upload':
       showUpload();
       break;
@@ -367,7 +503,6 @@ $( document ).ready(function() {
     case 'status':
       showStatus();
       break;
-    case '':
     case 'documents':
     default:
       var doc = getUrlParameter('view');

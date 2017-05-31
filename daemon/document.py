@@ -5,6 +5,12 @@ Thoughts for improvement:
 - Use threading to kick-off all meta & ocr logic at once (or at least X of them at a time) to leverage multiple CPU
 - Use threading for extracting PNGs (again, at least X threads)
 - The threading will work since it uses Popen
+
+Add new filter to detect top colors and match them to list, see:
+ha@development:~/projects/lagerdox/example-pdf$ convert rose.png -colors 32 limit.png
+ha@development:~/projects/lagerdox/example-pdf$ convert limit.png -define histogram:unique-colors=true -format %c histogram:info:-
+https://en.wikipedia.org/wiki/Color_difference
+
 """
 import re
 import logging
@@ -21,24 +27,26 @@ class Processor (threading.Thread):
   CMD_SPLITTER = 'pdftk %(filename)s cat <pages> output %(dest)s'
   CMD_OCR_PAGE = 'tesseract %(workpath)s/page%(page)03d.png %(workpath)s/page%(page)03d -psm 1'
 
-  CMD_THUMB_SMALL = 'convert %(workpath)s/page%(page)03d.png -resize 155x200 -quality 85 %(workpath)s/small%(page)03d.jpg'
-  CMD_THUMB_LARGE = 'convert %(workpath)s/page%(page)03d.png -resize 620x800 -quality 85 %(workpath)s/large%(page)03d.jpg'
+  CMD_THUMB_SMALL = 'convert %(workpath)s/page%(page)03d.png -resize 155x200 -rotate %(rotate)d -quality 85 %(workpath)s/small%(page)03d.jpg'
+  CMD_THUMB_LARGE = 'convert %(workpath)s/page%(page)03d.png -resize 620x800 -rotate %(rotate)d -quality 85 %(workpath)s/large%(page)03d.jpg'
 
   CMD_META_DEGREE = 'tesseract %(workpath)s/page%(page)03d.png - -psm 0'
   CMD_META_BLANK1 = 'convert %(workpath)s/page%(page)03d.png -colorspace Gray -'
   CMD_META_BLANK2 = 'identify -format %%[standard-deviation]\\n%%[max]\\n%%[min]\\n -'
+  CMD_META_COLOR  = 'convert %(workpath)s/page%(page)03d.png -colorspace HSL -channel H -separate -unique-colors -format %%w info:'
 
   BLANK_INDICATOR = 100
   MULTIPLE_INDICATOR = 'QR-Code:__SCANNER_DOCUMENT_SEPARATOR__'
 
-  def __init__(self, uid, filename, callback):
+  def __init__(self, uid, filename, workpath, callback, existing=None):
     threading.Thread.__init__(self)
     self.daemon = True
 
     self.callback = callback
     self.filename = filename
-    self.workpath = os.path.dirname(filename)
+    self.workpath = workpath
     self.filepart = os.path.basename(filename)
+    self.existing = existing
     self.state = {
       'overall' : 'PENDING',
       'files' : 0,
@@ -89,11 +97,34 @@ class Processor (threading.Thread):
       return None, -1
 
   def run(self):
-    result = self.process()
+    if self.existing:
+      print(repr(self.existing))
+      result = self.processThumb()
+    else:
+      result = self.processFull()
+
     self.state['overall'] = 'FINISHED'
     self.callback(self.uid, result)
 
-  def process(self):
+  def processThumb(self):
+    self.state['overall'] = 'EXTRACT'
+    success, _ = self.extract()
+    if not success:
+      self.state['overall'] = 'FAILED'
+      return
+    # Produce metadata
+    result = []
+    self.state['overall'] = 'PROCESS'
+    for p in self.existing['pages']:
+      self.state['page'] = p['page']
+      self.state['sub'] = 'THUMB'
+      self.thumb(p['page'], p)
+
+    self.state['overall'] = 'COMPLETE'
+    self.existing['type'] = 'thumbnail'
+    return [self.existing]
+
+  def processFull(self):
     self.state['overall'] = 'EXTRACT'
     success, pages = self.extract()
     if not success:
@@ -110,10 +141,12 @@ class Processor (threading.Thread):
     result = []
     self.state['overall'] = 'PROCESS'
     for f in files:
-      data = {'file' : f['file'], 'pagelen' : len(f['pages']), 'metadata' : []}
+      data = {'type' : 'import', 'file' : f['file'], 'pagelen' : len(f['pages']), 'metadata' : []}
       for p in f['pages']:
         self.state['page'] = p
         metadata = {'page' : p}
+        self.state['sub'] = 'COLORS'
+        self.detectcolor(p, metadata)
         self.state['sub'] = 'DEGREE'
         self.meta_degree(p, metadata)
         self.state['sub'] = 'BLANK'
@@ -121,7 +154,7 @@ class Processor (threading.Thread):
         self.state['sub'] = 'OCR'
         self.ocrpage(p, metadata)
         self.state['sub'] = 'THUMB'
-        self.thumb(p)
+        self.thumb(p, metadata)
 
         data['metadata'].append(metadata)
       result.append(data)
@@ -130,9 +163,23 @@ class Processor (threading.Thread):
     self.state['overall'] = 'COMPLETE'
     return result
 
-  def thumb(self, page):
+  def detectcolor(self, page, metadata):
+    metadata['colors'] = 0
+
+    lines, result = self._execute(Processor.CMD_META_COLOR, {'page' : page})
+    if result == 0 and lines:
+      metadata['colors'] = int(lines)
+    else:
+      logging.error('Failed to analyze colors of page %d in "%s"' % (page, self.filepart))
+      lines = lines.split('\n')
+      for line in lines:
+        logging.error('>>> ' + line.strip())
+      return False
+
+
+  def thumb(self, page, metadata):
     # Reuse pageXXX.png to produce viable thumbnails and avoid render PDF again
-    lines, result = self._execute(Processor.CMD_THUMB_SMALL, {'page' : page})
+    lines, result = self._execute(Processor.CMD_THUMB_SMALL, {'page' : page, 'rotate' : -metadata['degrees']})
     if result != 0:
       logging.error('Failed to generate small thumb of page %d in "%s"' % (page, self.filepart))
       lines = lines.split('\n')
@@ -140,7 +187,7 @@ class Processor (threading.Thread):
         logging.error('>>> ' + line.strip())
       return False
 
-    lines, result = self._execute(Processor.CMD_THUMB_LARGE, {'page' : page})
+    lines, result = self._execute(Processor.CMD_THUMB_LARGE, {'page' : page, 'rotate' : -metadata['degrees']})
     if result != 0:
       logging.error('Failed to generate large thumb of page %d in "%s"' % (page, self.filepart))
       lines = lines.split('\n')
@@ -186,16 +233,16 @@ class Processor (threading.Thread):
 
   def meta_degree(self, page, meta):
     '''Detects orientation of page'''
-    meta['degree'] = 0
-    meta['degree-confidence'] = 0
+    meta['degrees'] = 0
+    meta['confidence'] = 0
     lines, result = self._execute(Processor.CMD_META_DEGREE, {'page' : page})
     if lines:
       for line in lines.split('\n'):
         parts = line.strip().split(':')
         if 'Orientation in degrees' in parts[0]:
-          meta['degree'] = int(parts[1])
+          meta['degrees'] = int(parts[1])
         elif 'Orientation confidence' in parts[0]:
-          meta['degree-confidence'] = float(parts[1])
+          meta['confidence'] = float(parts[1])
       return True
     return False
 
@@ -312,9 +359,30 @@ class Feeder (threading.Thread):
   def run(self):
     while not self.stop:
       item = self.queue.get()
-      logging.info('Processing from queue')
-      self.process(item['uid'], item['content'])
+      logging.info('Processing from queue');
+      if item['content']['type'] == 'import':
+        self.process(item['uid'], item['content'])
+      elif item['content']['type'] == 'thumbnail':
+        self.addthumb(item['uid'], item['content'])
       self.queue.task_done()
+
+  def addthumb(self, uid, content):
+    # Just copy the thumbnails
+    folder = os.path.dirname(content['filename'])
+    subfolder = os.path.basename(content['filename'])[:-4]
+    dstpath = os.path.join(self.destdir, folder, subfolder)
+    srcpath = os.path.join(self.basedir, uid)
+    if not os.path.exists(dstpath):
+      os.makedirs(dstpath)
+    for p in content['pages']:
+      src = os.path.join(srcpath, 'small%03d.jpg' % p['page'])
+      dst = os.path.join(dstpath, 'small%03d.jpg' % p['page'])
+      shutil.copy(src, dst)
+      src = os.path.join(srcpath, 'large%03d.jpg' % p['page'])
+      dst = os.path.join(dstpath, 'large%03d.jpg' % p['page'])
+      logging.debug('Copying "%s" => "%s"' % (src, dst))
+      shutil.copy(src, dst)
+    self.cleanup(os.path.join(self.basedir, uid))
 
   def process(self, uid, content):
     # Create a document first so we can feed it the pages
@@ -333,7 +401,7 @@ class Feeder (threading.Thread):
           logging.error('No data found for page %d' % meta['page'])
           data = ''
         logging.debug('Adding page %d to document' % (meta['page']+1))
-        self.dbconn.add_page(id, meta['page'], meta['ocr'], meta['blank-confidence'], meta['degree'], meta['degree-confidence'], data)
+        self.dbconn.add_page(id, meta['page'], meta['ocr'], meta['blank-confidence'], meta['degrees'], meta['confidence'], meta['colors'], data)
         self.analzer.updateDate(data)
 
       date = self.analzer.finishDate()

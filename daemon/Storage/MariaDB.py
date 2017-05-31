@@ -1,4 +1,4 @@
-# Need to add string escape code
+# TODO:
 #
 import sys
 import time
@@ -79,7 +79,7 @@ class MariaDB:
   def setup(self, force):
     if force:
       cursor = self.getCursor(buffered=True)
-      for table in [ 'documents', 'pages', 'categories', 'tags', 'tagmap' ]:
+      for table in [ 'documents', 'pages', 'categories', 'tags', 'tagmap', 'contents' ]:
         query = ("DROP TABLE " + table)
         try:
           logging.info(query)
@@ -94,7 +94,8 @@ class MariaDB:
 
     sql = [
       'CREATE TABLE documents (id INT PRIMARY KEY AUTO_INCREMENT, category INT, scanned INT NOT NULL, received INT, pages INT NOT NULL, filename TEXT NOT NULL)',
-      'CREATE TABLE pages (id INT NOT NULL, page INT NOT NULL, ocr BOOLEAN NOT NULL, blankness INT NOT NULL, degrees INT NOT NULL, confidence REAL NOT NULL, content LONGTEXT NOT NULL, FULLTEXT INDEX (content), UNIQUE KEY page (page, id))',
+      'CREATE TABLE pages (id INT NOT NULL, page INT NOT NULL, ocr BOOLEAN NOT NULL, blankness INT NOT NULL, degrees INT NOT NULL, confidence REAL NOT NULL, colors INT NOT NULL, UNIQUE KEY page (page, id))',
+      'CREATE TABLE contents (id INT NOT NULL, page INT NOT NULL, content LONGTEXT NOT NULL, FULLTEXT INDEX (content), UNIQUE KEY page (page, id))',
       'CREATE TABLE categories (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(128) NOT NULL, filter TEXT NOT NULL DEFAULT "")',
       'CREATE TABLE tags (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(128) NOT NULL, UNIQUE KEY name (name))',
       'CREATE TABLE tagmap (tag INT NOT NULL, document INT NOT NULL, UNIQUE KEY tag (tag, document))'
@@ -130,12 +131,18 @@ class MariaDB:
       cursor.close()
     return None
 
-  def add_page(self, document, page, ocr, blankness, degrees, confidence, blob):
-    query = 'INSERT INTO pages (id, page, ocr, blankness, degrees, confidence, content) VALUES (%s, %s, %s, %s, %s, %s, %s)'
+  def add_page(self, document, page, ocr, blankness, degrees, confidence, colors, blob):
+    query = 'INSERT INTO pages (id, page, ocr, blankness, degrees, confidence, colors) VALUES (%s, %s, %s, %s, %s, %s, %s)'
     cursor = self.getCursor(buffered=True)
     try:
-      cursor.execute(query, (document, page, ocr, blankness, degrees, confidence, blob))
+      cursor.execute(query, (document, page, ocr, blankness, degrees, confidence, colors))
       self.cnx.commit()
+      cursor.close()
+      query = 'INSERT INTO contents (id, page, content) VALUES (%s, %s, %s)'
+      cursor = self.getCursor(buffered=True)
+      cursor.execute(query, (document, page, blob))
+      self.cnx.commit()
+      cursor.close()
       return True
     except mysql.connector.Error as err:
       logging.exception('Failed to add page: ' + repr(err));
@@ -153,6 +160,11 @@ class MariaDB:
         return False
       cursor.close()
       query = 'DELETE FROM pages WHERE id = %s' % document
+      cursor = self.getCursor(buffered=True)
+      cursor.execute(query)
+      self.cnx.commit()
+      cursor.close()
+      query = 'DELETE FROM contents WHERE id = %s' % document
       cursor = self.getCursor(buffered=True)
       cursor.execute(query)
       self.cnx.commit()
@@ -194,10 +206,13 @@ class MariaDB:
 
     query = 'UPDATE categories SET'
     if name is not None:
-      query += ' name="%s"' % name
+      query += ' name="%s"' % self.cnx.converter.escape(name)
+    if name and filter:
+      query += ', '
     if filter is not None:
-      query += ' filter="%s"' % filter
+      query += ' filter="%s"' % self.cnx.converter.escape(filter)
     query += ' WHERE id=%d' % id
+    logging.debug('Query: ' + query)
     cursor = self.getCursor(buffered=True)
     try:
       cursor.execute(query)
@@ -268,6 +283,8 @@ class MariaDB:
       self.cnx.commit()
       return cursor.rowcount == 1
     except mysql.connector.Error as err:
+      if err[0] == 1062: # Special case, already have tag, swallow error
+        return True
       logging.exception('Failed to assign tag: ' + repr(err));
     finally:
       cursor.close()
@@ -367,8 +384,20 @@ class MariaDB:
   def query_tags(self):
     return self._query_with_iterator('SELECT * FROM tags ORDER BY name')
 
+  def query_tag(self, id):
+    data = self._query_with_iterator('SELECT * FROM tags WHERE id = %d' % id)
+    if data is not None:
+      data = data.next()
+    return data
+
   def query_categories(self):
     return self._query_with_iterator('SELECT * FROM categories ORDER BY name')
+
+  def query_category(self, id):
+    data = self._query_with_iterator('SELECT * FROM categories WHERE id = %d' % id)
+    if data is not None:
+      data = data.next()
+    return data
 
   def query_document(self, id):
     data = None
@@ -387,6 +416,13 @@ class MariaDB:
         data['tags'].append(t)
       if len(data['tags']) == 0:
         del data['tags']
+      # And finally, load page info (not the text, just details)
+      result = self._query_with_iterator('SELECT * FROM pages WHERE id = %d' % id)
+      data['page'] = []
+      for t in result:
+        data['page'].append(t)
+      if len(data['page']) == 0:
+        del data['page']
     except:
       logging.exception('Error getting document')
     return data
@@ -409,6 +445,14 @@ class MariaDB:
     result = self._query_with_iterator('SELECT * FROM pages WHERE id = %d ORDER BY page' % id)
     return result
 
+  def query_content(self, id, page):
+    data = None
+    result = self._query_with_iterator('SELECT content FROM contents WHERE id = %d AND page = %d' % (id, page))
+    if result:
+      result = result.next()
+      data = result['content']
+    return data
+
   def cleanDocumentInfo(self, record):
     if 'category' in record and record['category'] == 0:
       del record['category']
@@ -419,6 +463,28 @@ class MariaDB:
       del record['scanned']
     if 'received' in record and record['received'] == 0:
       del record['received']
+
+  def query_all(self, keys):
+    query = """SELECT documents.*,categories.name AS cname,pages.*, MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE) AS score
+              FROM pages
+                LEFT JOIN documents ON (documents.id = pages.id)
+                LEFT JOIN categories ON (categories.id = documents.category)
+                LEFT JOIN tagmap ON (documents.id = tagmap.document)
+                LEFT JOIN tags ON (tags.id = tagmap.tag)
+                LEFT JOIN contents ON (contents.id = pages.id AND contents.page = pages.page)
+              WHERE MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE)
+              ORDER BY documents.id, pages.page, score DESC""" % (keys['text'], keys['text'])
+
+    cursor = self.getCursor(dictionary=True, buffered=True)
+    try:
+      cursor.execute(query) # , (keys['text']))
+      return Iterator(cursor, self.cleanDocumentInfo)
+    except mysql.connector.Error as err:
+      logging.exception('Failed to query data: ' + repr(err));
+      logging.error('Query was "%s"' % query)
+      logging.error('Keys contained: ' + repr(keys))
+    cursor.close()
+    return Iterator(None, 'Error performing query')
 
   def query_documents(self, tags=None, categories=None, sortby=None):
     # Build the query

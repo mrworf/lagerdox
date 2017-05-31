@@ -48,7 +48,7 @@ from tornado.ioloop import IOLoop
 from tornado.web import Application, FallbackHandler
 from tornado.websocket import WebSocketHandler
 
-from flask import Flask, jsonify, Response, request, redirect, url_for, send_file
+from flask import Flask, jsonify, Response, request, redirect, url_for, send_file, abort
 from werkzeug.utils import secure_filename
 import threading
 import Queue
@@ -138,6 +138,26 @@ def deleteDocument(filename):
     os.remove(document)
   return True
 
+def generateThumbs(id):
+  id = int(id)
+  doc = database.query_document(id)
+  pages = database.query_pages(id)
+  if doc is None or pages is None:
+    logging.error('Cannot create thumbs for non-existant document (%d)' % id)
+    return
+
+  meta = {'pages' : [], 'filename' : doc['filename']}
+  for page in pages:
+    meta['pages'].append(page)
+
+  uid = str(uuid.uuid4())
+  path = os.path.join(UPLOAD_FOLDER, uid)
+  absfile = os.path.join(COMPLETE_FOLDER, doc['filename'])
+  if not os.path.exists(path):
+    os.makedirs(path)
+  logging.info('Generating thumbnails for "%s"' % absfile)
+  processList[uid] = document.Processor(uid, absfile, path, handleResult, meta)
+
 @app.route("/upload", methods=['POST'])
 def documentUpload():
   ret = {}
@@ -164,7 +184,7 @@ def documentUpload():
       ret['result'] = 'OK'
       ret['uid'] = uid
       logging.info('New file received and stored in "%s"' % absfile)
-      processList[uid] = document.Processor(uid, absfile, handleResult)
+      processList[uid] = document.Processor(uid, absfile, os.path.dirname(absfile), handleResult)
 
   res = jsonify(ret)
   if 'error' in ret:
@@ -182,16 +202,76 @@ def getStatus():
   res.status_code = 200
   return res
 
+@app.route("/document/<id>/category/<category>", methods=['PUT'])
+@app.route("/document/<id>/category", methods=['DELETE'], defaults={'category' : 0})
+def documentCategory(id, category):
+  ret = {}
+  if request.method == 'PUT' and category != 0:
+    if database.assign_category(int(id), int(category)):
+      ret['result'] = category
+    else:
+      ret['error'] = 'Cannot set category'
+  elif request.method == 'DELETE':
+    if database.assign_category(int(id), 0):
+      ret['result'] = category
+    else:
+      ret['error'] = 'Cannot delete category'
+  else:
+    ret['error'] = 'Invalid operation'
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+  else:
+    res.status_code = 200
+  return res
+
+@app.route("/document/<id>/tag/<tag>", methods=['PUT','DELETE'])
+@app.route("/document/<id>/tag", methods=['DELETE'], defaults={'tag':0})
+def documentTag(id, tag):
+  ret = {}
+  if request.method == 'PUT':
+    if database.assign_tag(int(id), int(tag)):
+      ret['result'] = int(tag)
+    else:
+      ret['error'] = 'Cannot set tag'
+  elif request.method == 'DELETE':
+    if request.path.endswith('/tag'):
+      if database.clear_tag(int(id)):
+        ret['result'] = int(id)
+      else:
+        ret['error'] = 'Cannot clear tags'
+    else:
+      if database.remove_tag(int(id), int(tag)):
+        ret['result'] = int(tag)
+      else:
+        ret['error'] = 'Cannot delete tag'
+  else:
+    ret['error'] = 'Invalid operation'
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+  else:
+    res.status_code = 200
+  return res
+
 @app.route("/document/<id>", methods=['GET','DELETE'])
+@app.route("/document/<id>/download", methods=['GET'])
 @app.route("/document/<id>/update", methods=['POST', 'DELETE'])
 def documentDetails(id):
   ret = {}
   if request.method == 'GET':
     doc = database.query_document(int(id))
-    if doc is None:
-      ret['error'] = 'No such document'
+    if request.path.endswith('/download'):
+      if doc is None:
+        abort(404)
+      else:
+        filename = os.path.join(COMPLETE_FOLDER, doc['filename'])
+        return send_file(filename)
     else:
-      ret = doc
+      if doc is None:
+        ret['error'] = 'No such document'
+      else:
+        ret = doc
   elif request.method == 'DELETE':
     if request.path.endswith('/update'):
       json = request.get_json()
@@ -241,6 +321,21 @@ def documentDetails(id):
     res.status_code = 200
   return res
 
+@app.route("/document/<id>/page/<page>", methods=['GET'])
+def documentGetPage(id, page):
+  data = database.query_content(int(id), int(page))
+  ret = {}
+  if data:
+    ret = {'result' : data}
+  else:
+    ret = {'error' : 'No such page'}
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+  else:
+    res.status_code = 200
+  return res
+
 @app.route("/document/<id>/small/<thumb>", methods=['GET'])
 @app.route("/document/<id>/large/<thumb>", methods=['GET'])
 def documentThumbnail(id, thumb):
@@ -249,42 +344,59 @@ def documentThumbnail(id, thumb):
     ret = {'error' : 'Invalid document or page'}
   elif '/small/' in request.path:
     filename = os.path.join(COMPLETE_FOLDER, doc['filename'][:-4], 'small%003d.jpg' % int(thumb))
-    return send_file(filename)
+    if os.path.exists(filename):
+      return send_file(filename)
+    else:
+      generateThumbs(id)
+      ret = {'error' : 'Thumbnail missing'}
   elif '/large/' in request.path:
     filename = os.path.join(COMPLETE_FOLDER, doc['filename'][:-4], 'large%003d.jpg' % int(thumb))
-    return send_file(filename)
+    if os.path.exists(filename):
+      return send_file(filename)
+    else:
+      generateThumbs(id)
+      ret = {'error' : 'Thumbnail missing'}
   else:
     ret = {'error' : 'Invalid thumb type'}
   res = jsonify(ret)
   res.status_code = 500
   return res
 
-@app.route('/category', methods=['PUT','DELETE'])
-def categoryEdit():
+@app.route('/category/<id>', methods=['GET', 'PUT', 'DELETE'])
+@app.route('/category', methods=['PUT'], defaults={'id':None})
+def categoryEdit(id):
   ret = {}
   json = request.get_json()
-  if json is None or ('name' not in json and 'id' not in json):
-    ret['error'] = 'Invalid request, missing fields, got:' + repr(json)
-  elif request.method == 'PUT':
-    id = None
-    if 'id' in json: # It's an update!
-      if database.set_category(json['id'], json.get('name', None), json.get('filter', None)):
-        id = json['id']
+  #if json is None or ('name' not in json and 'id' not in json):
+  #  ret['error'] = 'Invalid request, missing fields, got:' + repr(json)
+  if id is not None:
+    id = int(id)
+
+  if request.method == 'GET':
+    res = database.query_category(id)
+    if res is None:
+      ret['error'] = 'No such category'
     else:
+      ret['result'] = res
+  elif request.method == 'PUT' and json:
+    if id:
+      if database.set_category(id, json.get('name', None), json.get('filter', {})):
+        ret['result'] = id
+      else:
+        ret['error'] = 'Unable to edit category';
+    elif not id:
       id = database.add_category(json['name'], json.get('filter', '{}'))
-    if id is None:
-      ret['error'] = 'Unable to add/edit category'
-    else:
-      ret['result'] = id
+      if id is None:
+        ret['error'] = 'Unable to add category'
+      else:
+        ret['result'] = id
   elif request.method == 'DELETE':
-    id = None
-    if 'id' in json:
-      if database.delete_category(json['id']):
-        id = json['id']
-    if id is None:
+    if not database.delete_category(id):
       ret['error'] = 'Unable to delete category'
     else:
       ret['result'] = id
+  else:
+    ret['error'] = 'Invalid request'
   res = jsonify(ret)
   if 'error' in ret:
     res.status_code = 500
@@ -321,6 +433,24 @@ def documentList():
     res.status_code = 200
   return res
 
+@app.route("/search", methods=['POST'])
+def search():
+  ret = {'result' : []}
+
+  json = request.get_json()
+  if not json or 'text' not in json:
+    ret = {'error' : 'Invalid request'}
+  else:
+    for entry in database.query_all(json):
+      ret['result'].append(entry)
+
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+  else:
+    res.status_code = 200
+  return res
+
 @app.route("/tags", methods=['GET'])
 def tagList():
   ret = {'result' : []}
@@ -335,29 +465,33 @@ def tagList():
     res.status_code = 200
   return res
 
-@app.route('/tag', methods=['PUT','DELETE'])
-def tagEdit():
+@app.route('/tag/<id>', methods=['GET','PUT','DELETE'])
+@app.route('/tag', methods=['PUT'], defaults={'id' : None})
+def tagEdit(id):
+  if id is not None:
+    id = int(id)
   ret = {}
   json = request.get_json()
-  if json is None or ('name' not in json and 'id' not in json):
-    ret['error'] = 'Invalid request, missing fields'
+  if request.method == 'GET':
+    data = database.query_tag(id)
+    if data:
+      ret['result'] = data
+    else:
+      ret['error'] = 'No such tag'
   elif request.method == 'PUT':
-    id = None
-    if 'id' in json: # It's an update!
-      if database.set_tag(json['id'], json.get('name')):
-        id = json['id']
+    if id:
+      if not database.set_tag(id, json.get('name')):
+        ret['error'] = 'Failed to update tag'
+      else:
+        ret['result'] = id
     else:
       id = database.add_tag(json['name'])
-    if id is None:
-      ret['error'] = 'Unable to add/edit tag'
-    else:
-      ret['result'] = id
+      if id is None:
+        ret['error'] = 'Unable to add tag'
+      else:
+        ret['result'] = id
   elif request.method == 'DELETE':
-    id = None
-    if 'id' in json:
-      if database.delete_tag(json['id']):
-        id = json['id']
-    if id is None:
+    if not database.delete_tag(id):
       ret['error'] = 'Unable to delete tag'
     else:
       ret['result'] = id

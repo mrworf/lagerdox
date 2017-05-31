@@ -1,0 +1,14 @@
+<div class="tags">
+	{{#each result}}
+	<div class="tag">
+		<span class="name">{{name}}</span>
+		<button type="button" id="tag_delete" data-id="{{id}}">Delete</button>
+		<button type="button" id="tag_edit" data-id="{{id}}">Edit</button>
+	</div>
+	{{/each}}
+	<div class="add">
+		Name <input type="text" id="name"><br>
+		<button type="button" id="save" style="display: none">Save</button>
+		<button type="button" id="add">Add</button>
+	</div>
+</div>

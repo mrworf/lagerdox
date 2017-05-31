@@ -1,7 +1,7 @@
 {{#each items}}
 <div class="document_item">
   <a href="?section=documents&view={{id}}">
-    <img src="http://{{../server}}:7000/document/{{id}}/small/0" />
+    <img src="http://{{../server}}:7000/document/{{id}}/small/{{page}}" />
   </a>
   <div class="document_info">
     {{#if scanned}}Added {{dtos scanned}}<br>{{/if}}
@@ -9,12 +9,13 @@
     {{#if category}}{{category.name}}<br>{{/if}}
     {{#if tags}}{{#each tags}}{{name}} {{/each}}<br>{{/if}}
     <hr>
-    Pages {{pages}}<br>
+    Found in page {{rebase page 1}} of {{pages}}<br>
+    Score {{score}}<br>
     <hr>
     <button id="item_delete" data-id="{{id}}">Delete</button>
     <button id="item_download" data-id="{{id}}">Download</button>
   </div>
 </div>
 {{else}}
-It doesn't seem like you have any documents in the system. Use the <a href="?section=upload">upload</a> section to add documents.
+No result found for search critera, please try again
 {{/each}}
