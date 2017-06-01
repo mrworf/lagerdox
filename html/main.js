@@ -1,161 +1,32 @@
-LagerDoxClient = function() {
-  this.cfgAddress = "http://magi.sfo.sensenet.nu:7000/";
-
-  this.execServer = function(addr, successFunction, errorFunction, reqType, data) {
-    if (errorFunction == undefined)
-      errorFunction = this.genericError;
-    if (reqType == undefined)
-      reqType = 'GET';
-    var req = {
-      url: this.cfgAddress + addr,
-      type: reqType,
-      success: function(obj, info, t) {
-        successFunction(obj);
-      },
-      error: function(obj, info, t) {
-        console.log("ResultERR: " + info + " from calling " + addr);
-        errorFunction(info);
-      }
-    }
-    if (data != undefined) {
-      req['data'] = JSON.stringify(data);
-      req['contentType'] = 'application/json; charset=utf-8';
-      req['dataType'] = 'json';
-    }
-    $.ajax(req);
-  }
-
-  this.getDocuments = function(resultFunction, errorFunction) {
-    this.execServer('/documents', function(result) {
-      for (var d in result["result"]) {
-        var doc = result["result"][d];
-        if ('received' in doc)
-          result["result"][d]['received'] = new Date(doc['received']*1000);
-        if ('scanned' in doc)
-          result["result"][d]['scanned'] = new Date(doc['scanned']*1000);
-      }
-      resultFunction(result);
-    }, errorFunction);
-  }
-
-  this.getDocument = function(id, resultFunction, errorFunction) {
-    this.execServer('/document/' + id, function(result) {
-      if ('received' in result && result['received'] > 0)
-        result['received'] = new Date(result['received']*1000);
-      if ('scanned' in result && result['scanned'] > 0)
-        result['scanned'] = new Date(result['scanned']*1000);
-      resultFunction(result);
-    }, errorFunction);
-  }
-
-  this.getTags = function(resultFunction, errorFunction) {
-    this.execServer('/tags', function(result) {
-      resultFunction(result);
-    }, errorFunction);
-  }
-
-  this.getTag = function(id, resultFunction, errorFunction) {
-    this.execServer('/tag/' + id, function(result) {
-      resultFunction(result);
-    }, errorFunction);
-  }
-
-  this.getStatus = function(resultFunction, errorFunction) {
-    this.execServer('/status', function(result) {
-      resultFunction(result);
-    }, errorFunction);
-  }
-
-  this.getCategories = function(resultFunction, errorFunction) {
-    this.execServer('/categories', function(result) {
-      resultFunction(result);
-    }, errorFunction);
-  }
-
-  this.getCategory = function(id, resultFunction, errorFunction) {
-    this.execServer('/category/' + parseInt(id), function(result) {
-      resultFunction(result);
-    }, errorFunction);
-  }
-
-  this.genericError = function(result) {
-    alert("AJAX call failed!\nError:" + result['error']);
-  }
-
-  this.deleteDocument = function(id, resultFunction, errorFunction) {
-    this.execServer('/document/' + id, resultFunction, errorFunction, 'DELETE');
-  }
-
-  this.addCategory = function(name, filter, resultFunction, errorFunction) {
-    this.execServer('/category', resultFunction, errorFunction, 'PUT', {'name':name,'filter':filter});
-  }
-
-  this.editCategory = function(id, name, filter, resultFunction, errorFunction) {
-    this.execServer('/category/' + id, resultFunction, errorFunction, 'PUT', {'name':name,'filter':filter});
-  }
-
-  this.deleteCategory = function(id, resultFunction, errorFunction) {
-    this.execServer('/category/' + id, resultFunction, errorFunction, 'DELETE');
-  }
-
-  this.deleteTag = function(id, resultFunction, errorFunction) {
-    this.execServer('/tag/' + id, resultFunction, errorFunction, 'DELETE');
-  }
-
-  this.addTag = function(name, resultFunction, errorFunction) {
-    this.execServer('/tag', resultFunction, errorFunction, 'PUT', {'name':name});
-  }
-
-  this.editTag = function(id, name, resultFunction, errorFunction) {
-    this.execServer('/tag/' + id, resultFunction, errorFunction, 'PUT', {'name':name});
-  }
-
-  this.getPageContent = function(id, page, resultFunction, errorFunction) {
-    this.execServer('/document/' + id + '/page/' + page, resultFunction, errorFunction);
-  }
-
-  this.assignCategory = function(doc, cat, resultFunction, errorFunction) {
-    this.execServer('/document/' + doc + '/category/' + cat, resultFunction, errorFunction, 'PUT');
-  }
-
-  this.removeCategory = function(doc, resultFunction, errorFunction) {
-    this.execServer('/document/' + doc + '/category', resultFunction, errorFunction, 'DELETE');
-  }
-
-  this.assignTag = function(doc, tag, resultFunction, errorFunction) {
-    this.execServer('/document/' + doc + '/tag/' + tag, resultFunction, errorFunction, 'PUT');
-  }
-
-  this.removeTag = function(doc, tag, resultFunction, errorFunction) {
-    this.execServer('/document/' + doc + '/tag/' + tag, resultFunction, errorFunction, 'DELETE');
-  }
-
-  this.clearTags = function(doc, resultFunction, errorFunction) {
-    this.execServer('/document/' + doc + '/tag', resultFunction, errorFunction, 'DELETE');
-  }
-
-  this.search = function(text, resultFunction, errorFunction) {
-    this.execServer('/search', function (result) {
-      for (var i in result['result']) {
-        if ('received' in result['result'][i] && result['result'][i]['received'] > 0)
-          result[i]['received'] = new Date(result['result'][i]['received']*1000);
-        if ('scanned' in result['result'][i] && result['result'][i]['scanned'] > 0)
-          result['result'][i]['scanned'] = new Date(result['result'][i]['scanned']*1000);
-      }
-      resultFunction(result);
-    }, errorFunction, 'POST', {'text':text});
-  }
-}
-
 $( document ).ready(function() {
-  client = new LagerDoxClient();
+  var serverName = "magi.sfo.sensenet.nu";
+  var client = new LagerDoxClient('http://' + serverName + ':7000/');
+
+  // See http://berzniz.com/post/24743062344/handling-handlebarsjs-like-a-pro
+  Handlebars.getTemplate = function(name) {
+    if (Handlebars.templates === undefined || Handlebars.templates[name] === undefined) {
+      $.ajax({
+        url : 'templates/' + name + '.html',
+        success : function(data) {
+          if (Handlebars.templates === undefined) {
+              Handlebars.templates = {};
+          }
+          Handlebars.templates[name] = Handlebars.compile(data);
+        },
+        async : false
+      });
+    }
+    return Handlebars.templates[name];
+  };
+
 
   function showDocs() {
     history.replaceState(null, "upload", "?section=documents");
     $('#content').empty();
     client.getDocuments(function(obj) {
+      //console.log(obj);
       var comp = Handlebars.getTemplate('document_list');
-      $('#content').html(comp({'server' : 'magi.sfo.sensenet.nu', 'items' : obj['result']}));
+      $('#content').html(comp({'server' : serverName, 'items' : obj['result']}));
       $('.document_item').on('click', '#item_delete', function(e) {
         deleteDoc(e.target.dataset.id, function() { $(e.delegateTarget).remove(); });
       });
@@ -200,8 +71,9 @@ $( document ).ready(function() {
     history.replaceState(null, "upload", "?section=documents&view=" + id);
     $('#content').empty();
     client.getDocument(id, function(obj) {
+      obj = obj['result'];
       var comp = Handlebars.getTemplate('document');
-      obj['server'] = 'magi.sfo.sensenet.nu';
+      obj['server'] = serverName;
       $('#content').html(comp(obj));
       $('#item_delete').on('click', function(e) {
         deleteDoc(e.target.dataset.id, function() { showDocs(); });
@@ -429,13 +301,16 @@ $( document ).ready(function() {
   }
 
   function search(query) {
-    history.replaceState(null, "search", "?section=search&q=" + encodeURIComponent(query));
     $('#results').empty();
-    client.search(query, function(result) {
-      console.log(result);
-      var comp = Handlebars.getTemplate('search_result');
-      $('#results').html(comp({'server' : 'magi.sfo.sensenet.nu', 'items' : result['result']}));
-    })
+    if (query == null) {
+      history.replaceState(null, "search", "?section=search");
+    } else {
+      history.replaceState(null, "search", "?section=search&q=" + encodeURIComponent(query));
+      client.search(query, function(result) {
+        var comp = Handlebars.getTemplate('search_result');
+        $('#results').html(comp({'server' : serverName, 'items' : result['result']}));
+      });
+    }
   }
 
   function getUrlParameter(sParam) {

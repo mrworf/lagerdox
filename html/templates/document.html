@@ -3,13 +3,11 @@
     {{#if scanned}}Added {{dtos scanned}}<br>{{/if}}
     {{#if received}}Dated {{dtos received}}<br>{{/if}}
     {{#if category}}{{category.name}}<br>{{/if}}
-    {{#if tags}}
-      {{#each tags}}
-        <button id="tag_delete" data-id="{{../id}}" data-tag="{{id}}">{{name}}</button>
-      {{/each}}
-      <button id="item_tag" data-id="{{id}}">Add...</button>
-      <br>
-    {{/if}}
+    {{#each tags}}
+      <button id="tag_delete" data-id="{{../id}}" data-tag="{{id}}">{{name}}</button>
+    {{/each}}
+    <button id="item_tag" data-id="{{id}}">Add...</button>
+    <br>
     <hr>
     Pages {{pages}}<br>
     <hr>

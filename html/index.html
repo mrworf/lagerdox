@@ -5,30 +5,11 @@
     <meta charset="utf-8"/>
     <script type="text/javascript" src="jquery-3.2.1.min.js"></script>
     <script type="text/javascript" src="handlebars-v4.0.10.js"></script>
-
-    <script type="text/javascript">
-      // See http://berzniz.com/post/24743062344/handling-handlebarsjs-like-a-pro
-      Handlebars.getTemplate = function(name) {
-        if (Handlebars.templates === undefined || Handlebars.templates[name] === undefined) {
-          $.ajax({
-            url : 'templates/' + name + '.html',
-            success : function(data) {
-              if (Handlebars.templates === undefined) {
-                  Handlebars.templates = {};
-              }
-              Handlebars.templates[name] = Handlebars.compile(data);
-            },
-            async : false
-          });
-        }
-        return Handlebars.templates[name];
-      };
-    </script>
-
     <script src="jq-upload/js/vendor/jquery.ui.widget.js"></script>
     <script src="jq-upload/js/jquery.iframe-transport.js"></script>
     <script src="jq-upload/js/jquery.fileupload.js"></script>
 
+    <script type="text/javascript" src="lagerdoxclient.js"></script>
     <script type="text/javascript" src="main.js"></script>
     <link rel="stylesheet" href="main.css">
   </head>

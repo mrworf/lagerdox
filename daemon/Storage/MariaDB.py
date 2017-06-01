@@ -371,11 +371,11 @@ class MariaDB:
       cursor.close()
     return False
 
-  def _query_with_iterator(self, query):
+  def _query_with_iterator(self, query, process=None):
     cursor = self.getCursor(dictionary=True, buffered=True)
     try:
       cursor.execute(query)
-      return Iterator(cursor, None)
+      return Iterator(cursor, process)
     except mysql.connector.Error as err:
       logging.exception('Query failed');
     cursor.close()
@@ -401,22 +401,24 @@ class MariaDB:
 
   def query_document(self, id):
     data = None
-    result = self._query_with_iterator('SELECT documents.*, categories.name AS cname FROM documents LEFT JOIN categories ON (documents.category = categories.id) WHERE documents.id = %d' % id)
+    result = self._query_with_iterator("""
+      SELECT
+        documents.*,
+        categories.name AS cname,
+        GROUP_CONCAT(tags.id ORDER BY tags.name ASC SEPARATOR ',') AS tags
+      FROM
+        documents
+        LEFT JOIN categories ON (documents.category = categories.id)
+        LEFT JOIN tagmap ON (documents.id = tagmap.document)
+        LEFT JOIN tags ON (tags.id = tagmap.tag)
+      WHERE
+        documents.id = %d
+      GROUP BY
+        documents.id
+    """ % id, self.cleanDocumentInfo)
     try:
       data = result.next()
-      if data['cname'] is not None:
-        data['category'] = {'id' : data['category'], 'name' : data['cname']}
-      else:
-        del data['category'];
-      del data['cname']
-      # Also load the tags related to this and replace the tag field
-      result = self._query_with_iterator('SELECT tags.id, tags.name FROM tagmap LEFT JOIN tags ON (tags.id = tagmap.tag) WHERE document = %d' % id)
-      data['tags'] = []
-      for t in result:
-        data['tags'].append(t)
-      if len(data['tags']) == 0:
-        del data['tags']
-      # And finally, load page info (not the text, just details)
+      # Finally, load page info (not the text, just details)
       result = self._query_with_iterator('SELECT * FROM pages WHERE id = %d' % id)
       data['page'] = []
       for t in result:
@@ -465,7 +467,12 @@ class MariaDB:
       del record['received']
 
   def query_all(self, keys):
-    query = """SELECT documents.*,categories.name AS cname,pages.*, MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE) AS score
+    query = """SELECT
+                documents.*,
+                categories.name AS cname,
+                pages.*,
+                MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE) AS score,
+                GROUP_CONCAT(tags.id ORDER BY tags.name ASC SEPARATOR ',') AS tags
               FROM pages
                 LEFT JOIN documents ON (documents.id = pages.id)
                 LEFT JOIN categories ON (categories.id = documents.category)
@@ -473,7 +480,9 @@ class MariaDB:
                 LEFT JOIN tags ON (tags.id = tagmap.tag)
                 LEFT JOIN contents ON (contents.id = pages.id AND contents.page = pages.page)
               WHERE MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE)
-              ORDER BY documents.id, pages.page, score DESC""" % (keys['text'], keys['text'])
+              GROUP BY documents.id
+              ORDER BY documents.id, pages.page, score DESC
+            """ % (keys['text'], keys['text'])
 
     cursor = self.getCursor(dictionary=True, buffered=True)
     try:
@@ -488,7 +497,18 @@ class MariaDB:
 
   def query_documents(self, tags=None, categories=None, sortby=None):
     # Build the query
-    query = 'SELECT documents.*,categories.name AS cname FROM documents LEFT JOIN categories ON (documents.category = categories.id)'
+    query = """ SELECT
+                  documents.*,
+                  categories.name AS cname,
+                  GROUP_CONCAT(tags.id ORDER BY tags.name ASC SEPARATOR ',') AS tags
+                FROM
+                  documents
+                  LEFT JOIN categories ON (documents.category = categories.id)
+                  LEFT JOIN tagmap ON (tagmap.document = documents.id)
+                  LEFT JOIN tags ON (tags.id = tagmap.tag)
+                GROUP BY
+                  documents.id
+            """
     if tags:
       query += ' LEFT JOIN tagmap ON tagmap.document = documents.id WHERE tagmap.id IN ('
       for tag in tags:
@@ -511,7 +531,7 @@ class MariaDB:
     if sortby:
       query += ' ORDER BY %s' % sortby
 
-    logging.debug('Query statement: ' + query)
+    #logging.debug('Query statement: ' + query)
 
     cursor = self.getCursor(dictionary=True, buffered=True)
     try:

@@ -342,7 +342,7 @@ class Processor (threading.Thread):
     return True, page
 
 class Feeder (threading.Thread):
-  def __init__(self, dbconn, basedir, destdir):
+  def __init__(self, dbconn, basedir, destdir, thumbdir):
     threading.Thread.__init__(self)
     self.daemon = True
     self.stop = False
@@ -350,6 +350,7 @@ class Feeder (threading.Thread):
     self.dbconn = dbconn
     self.basedir = basedir
     self.destdir = destdir
+    self.thumbdir = thumbdir
     self.analzer = Analyzer()
     self.start()
 
@@ -370,7 +371,7 @@ class Feeder (threading.Thread):
     # Just copy the thumbnails
     folder = os.path.dirname(content['filename'])
     subfolder = os.path.basename(content['filename'])[:-4]
-    dstpath = os.path.join(self.destdir, folder, subfolder)
+    dstpath = os.path.join(self.thumbdir, folder, subfolder)
     srcpath = os.path.join(self.basedir, uid)
     if not os.path.exists(dstpath):
       os.makedirs(dstpath)
@@ -431,7 +432,7 @@ class Feeder (threading.Thread):
     shutil.copy(filename, f)
 
     # Next, copy all thumbnails
-    dstpath = os.path.join(self.destdir, folder, '%s_document%d' % (t, c))
+    dstpath = os.path.join(self.thumbdir, folder, '%s_document%d' % (t, c))
     srcpath = os.path.dirname(filename)
     if not os.path.exists(dstpath):
       os.makedirs(dstpath)

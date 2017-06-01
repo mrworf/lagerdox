@@ -112,10 +112,11 @@ cors = CORS(app) # Needed to make us CORS compatible
 
 UPLOAD_FOLDER = '/tmp/lagerDox/'
 COMPLETE_FOLDER = '/tmp/lagerDox/done/'
+THUMB_FOLDER = '/tmp/lagerDox/thumbs/'
 ALLOWED_EXTENSIONS = set(['pdf'])
 
 processList = {}
-feeder = document.Feeder(database, UPLOAD_FOLDER, COMPLETE_FOLDER)
+feeder = document.Feeder(database, UPLOAD_FOLDER, COMPLETE_FOLDER, THUMB_FOLDER)
 
 #app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024 # 64MB!
@@ -271,7 +272,7 @@ def documentDetails(id):
       if doc is None:
         ret['error'] = 'No such document'
       else:
-        ret = doc
+        ret['result'] = doc
   elif request.method == 'DELETE':
     if request.path.endswith('/update'):
       json = request.get_json()
@@ -343,14 +344,14 @@ def documentThumbnail(id, thumb):
   if doc is None or int(thumb) >= doc['pages']:
     ret = {'error' : 'Invalid document or page'}
   elif '/small/' in request.path:
-    filename = os.path.join(COMPLETE_FOLDER, doc['filename'][:-4], 'small%003d.jpg' % int(thumb))
+    filename = os.path.join(THUMB_FOLDER, doc['filename'][:-4], 'small%003d.jpg' % int(thumb))
     if os.path.exists(filename):
       return send_file(filename)
     else:
       generateThumbs(id)
       ret = {'error' : 'Thumbnail missing'}
   elif '/large/' in request.path:
-    filename = os.path.join(COMPLETE_FOLDER, doc['filename'][:-4], 'large%003d.jpg' % int(thumb))
+    filename = os.path.join(THUMB_FOLDER, doc['filename'][:-4], 'large%003d.jpg' % int(thumb))
     if os.path.exists(filename):
       return send_file(filename)
     else:
