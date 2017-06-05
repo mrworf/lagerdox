@@ -391,7 +391,7 @@ class MariaDB:
     return data
 
   def query_categories(self):
-    return self._query_with_iterator('SELECT * FROM categories ORDER BY name')
+    return self._query_with_iterator('SELECT categories.*, COUNT(documents.id) AS uses FROM categories LEFT JOIN documents ON (documents.category = categories.id) GROUP BY categories.id ORDER BY name')
 
   def query_category(self, id):
     data = self._query_with_iterator('SELECT * FROM categories WHERE id = %d' % id)
@@ -429,14 +429,21 @@ class MariaDB:
       logging.exception('Error getting document')
     return data
 
-  def update_document(self, id, field, value):
+  def update_document(self, id, field, value=None):
     cursor = self.getCursor(dictionary=True, buffered=True)
-    query = 'UPDATE documents SET %s = %s WHERE id = %d' % (field, value, id)
+    if value is None:
+      query = 'UPDATE documents SET '
+      for k in field:
+        query += '%s = %s, ' % (k, field[k])
+      query = query[:-2] + ' WHERE id = %d' % id
+    else:
+      query = 'UPDATE documents SET %s = %s WHERE id = %d' % (field, value, id)
     try:
       cursor.execute(query)
       self.cnx.commit()
     except mysql.connector.Error as err:
       logging.exception('Query failed');
+      logging.error('Query was: "%s"' % query)
       return False
     finally:
       cursor.close()
@@ -466,23 +473,80 @@ class MariaDB:
     if 'received' in record and record['received'] == 0:
       del record['received']
 
+  def test_filter(self, filter, document=None):
+    if document is None:
+      query = """SELECT
+                  contents.id AS document,
+                  contents.page AS page,
+                  MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE) AS score
+                 FROM contents
+                 WHERE
+                  MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE)
+                 ORDER BY contents.id, contents.page
+              """
+    else:
+      query = """SELECT
+                  contents.id AS document,
+                  contents.page AS page,
+                  MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE) AS score
+                 FROM contents
+                 WHERE
+                  id = %s AND
+                  MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE)
+                 ORDER BY contents.id, contents.page
+              """
+    cursor = self.getCursor(dictionary=True, buffered=True)
+    try:
+      if document is None:
+        cursor.execute(query, (filter, filter))
+      else:
+        cursor.execute(query, (filter, document, filter))
+      return Iterator(cursor)
+    except mysql.connector.Error as err:
+      logging.exception('Failed to query data: ' + repr(err));
+      logging.error('Query was "%s"' % query)
+      logging.error('Keys contained: ' + repr(keys))
+    cursor.close()
+    return Iterator(None, 'Error performing query')
+
   def query_all(self, keys):
-    query = """SELECT
-                documents.*,
-                categories.name AS cname,
-                pages.*,
-                MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE) AS score,
-                GROUP_CONCAT(tags.id ORDER BY tags.name ASC SEPARATOR ',') AS tags
-              FROM pages
-                LEFT JOIN documents ON (documents.id = pages.id)
-                LEFT JOIN categories ON (categories.id = documents.category)
-                LEFT JOIN tagmap ON (documents.id = tagmap.document)
-                LEFT JOIN tags ON (tags.id = tagmap.tag)
-                LEFT JOIN contents ON (contents.id = pages.id AND contents.page = pages.page)
-              WHERE MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE)
-              GROUP BY documents.id
-              ORDER BY documents.id, pages.page, score DESC
-            """ % (keys['text'], keys['text'])
+    qfield = """
+      documents.*,
+      categories.name AS cname,
+      pages.*,
+      GROUP_CONCAT(tags.id ORDER BY tags.name ASC SEPARATOR ',') AS tags
+    """
+
+    qtables = """
+      pages
+      LEFT JOIN documents ON (documents.id = pages.id)
+      LEFT JOIN categories ON (categories.id = documents.category)
+      LEFT JOIN tagmap ON (documents.id = tagmap.document)
+      LEFT JOIN tags ON (tags.id = tagmap.tag)
+      LEFT JOIN contents ON (contents.id = pages.id AND contents.page = pages.page)
+    """
+
+    qwhere = ''
+
+    qgroup = """
+      documents.id
+    """
+
+    qorder = """
+      score DESC,
+      documents.id,
+      pages.page
+    """
+
+    if keys['text'] == '' and len(keys['modifier']['include']) == 0 and len(keys['modifier']['exclude']) == 0:
+      return Iterator(None, 'No query')
+    elif keys['text'] == '':
+      qfield += ', 1.0 AS score'
+    else:
+      qfield += ',MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE) AS score' % self.cnx.converter.escape(keys['text'])
+      qwhere += 'MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE)'  % self.cnx.converter.escape(keys['text'])
+
+    query = 'SELECT ' + qfield + ' FROM ' + qtables + ' WHERE ' + qwhere + ' GROUP BY ' + qgroup + ' ORDER BY ' + qorder
 
     cursor = self.getCursor(dictionary=True, buffered=True)
     try:

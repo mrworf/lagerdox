@@ -214,12 +214,7 @@ $( document ).ready(function() {
           $('#name').data('org', $('#name').val());
 
           var data = JSON.parse(result['result']['filter']);
-          var keys = '';
-          if ('keywords' in data) {
-            for (var e in data['keywords']) {
-              keys += ' ' + data['keywords'][e];
-            }
-          }
+          var keys = data['keywords'];
           $('#keywords').val(keys.trim());
           $('#keywords').data('org', $('#keywords').val());
 
@@ -234,7 +229,7 @@ $( document ).ready(function() {
         if ($('#name').val().trim() == '') {
           alert('No name provided');
         } else {
-          client.addCategory($('#name').val(), JSON.stringify({'keywords':$('#keywords').val().split(/\s+/)}), function(result) {
+          client.addCategory($('#name').val(), JSON.stringify({'keywords':$('#keywords').val()}), function(result) {
             showCategories();
           });
         }
@@ -249,8 +244,17 @@ $( document ).ready(function() {
           console.log(e);
           showCategories();
         } else {
-          client.editCategory($('#save').data('id'), $('#name').val(), JSON.stringify({'keywords':$('#keywords').val().split(/\s+/)}), function(result) {
+          client.editCategory($('#save').data('id'), $('#name').val(), JSON.stringify({'keywords':$('#keywords').val()}), function(result) {
             showCategories();
+          });
+        }
+      });
+      $('#test').on('click', function(e) {
+        if ($('#keywords').val().trim() == '') {
+          alert('No filter provided');
+        } else {
+          client.testFilter($('#keywords').val().trim(), function(result) {
+            console.log(result);
           });
         }
       });

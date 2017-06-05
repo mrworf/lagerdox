@@ -21,6 +21,7 @@ import argparse
 import uuid
 import os
 import sys
+import shlex
 
 import Storage
 import document
@@ -127,7 +128,7 @@ def allowed_file(filename):
 def handleResult(uid, content):
   logging.debug('%s finished with: %s' % (uid, repr(content)))
   for doc in content:
-    feeder.add(uid, doc)
+    feeder.add(uid, doc, processList[uid]['mode'], processList[uid]['extras'])
   del processList[uid]
 
 def deleteDocument(filename):
@@ -157,10 +158,11 @@ def generateThumbs(id):
   if not os.path.exists(path):
     os.makedirs(path)
   logging.info('Generating thumbnails for "%s"' % absfile)
-  processList[uid] = document.Processor(uid, absfile, path, handleResult, meta)
+  processList[uid] = {'process' : document.Processor(uid, absfile, path, handleResult, meta), 'mode' : 'thumb', 'extras' : None}
 
-@app.route("/upload", methods=['POST'])
-def documentUpload():
+@app.route("/upload", methods=['POST'], defaults={'mode' : None})
+@app.route("/upload/<mode>", methods=['POST'])
+def documentUpload(mode):
   ret = {}
 
   # check if the post request has the file part
@@ -185,7 +187,7 @@ def documentUpload():
       ret['result'] = 'OK'
       ret['uid'] = uid
       logging.info('New file received and stored in "%s"' % absfile)
-      processList[uid] = document.Processor(uid, absfile, os.path.dirname(absfile), handleResult)
+      processList[uid] = {'process' : document.Processor(uid, absfile, os.path.dirname(absfile), handleResult), 'mode' : mode, 'extras' : request.args}
 
   res = jsonify(ret)
   if 'error' in ret:
@@ -198,7 +200,7 @@ def documentUpload():
 def getStatus():
   ret = {'jobs' : {} }
   for p in processList:
-    ret['jobs'][p] = processList[p].getState()
+    ret['jobs'][p] = processList[p]['process'].getState()
   res = jsonify(ret)
   res.status_code = 200
   return res
@@ -363,6 +365,26 @@ def documentThumbnail(id, thumb):
   res.status_code = 500
   return res
 
+@app.route('/document/<id>/test', methods=['POST'])
+@app.route('/document/test', methods=['POST'], defaults={'id':None})
+def documentFilterTest(id):
+  ret = {}
+  json = request.get_json()
+  if json is None or 'filter' not in json:
+    ret['error']  = 'Invalid request'
+  else:
+    rec = database.test_filter(json['filter'], id);
+    ret['result'] = []
+    for r in rec:
+      ret['result'].append(r)
+  res = jsonify(ret)
+  if 'error' in ret:
+    res.status_code = 500
+    logging.error('%s failed: %s' % (request.path, ret['error']))
+  else:
+    res.status_code = 200
+  return res
+
 @app.route('/category/<id>', methods=['GET', 'PUT', 'DELETE'])
 @app.route('/category', methods=['PUT'], defaults={'id':None})
 def categoryEdit(id):
@@ -437,12 +459,33 @@ def documentList():
 @app.route("/search", methods=['POST'])
 def search():
   ret = {'result' : []}
-
+  query = {'text':'', 'modifier': {'include' : [], 'exclude' : []}}
   json = request.get_json()
   if not json or 'text' not in json:
     ret = {'error' : 'Invalid request'}
   else:
-    for entry in database.query_all(json):
+    # First step is to break it apart and put it together again
+    parts = shlex.split(json['text'])
+    new = ""
+    for part in parts:
+      if ':' in part:
+        logging.debug('"%s" is a keyword and will be removed from freeform' % part)
+        s = part.split(':', 2)
+        if s[0][0] == '-':
+          query['modifier']['exclude'].append({s[0][1:] : s[1]})
+        else:
+          query['modifier']['include'].append({s[0] : s[1]})
+      elif ' ' in part:
+        new += ' "%s"' % part
+      else:
+        new += ' %s' % part
+    if len(new):
+      new = new[1:]
+    query['text'] = new
+
+    logging.debug('Query: ' + repr(query))
+
+    for entry in database.query_all(query):
       ret['result'].append(entry)
 
   res = jsonify(ret)

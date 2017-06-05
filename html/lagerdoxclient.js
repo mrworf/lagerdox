@@ -191,11 +191,15 @@ LagerDoxClient = function(serverAddress) {
     this.execServer('/search', function (result) {
       for (var i in result['result']) {
         if ('received' in result['result'][i] && result['result'][i]['received'] > 0)
-          result[i]['received'] = new Date(result['result'][i]['received']*1000);
+          result['result'][i]['received'] = new Date(result['result'][i]['received']*1000);
         if ('scanned' in result['result'][i] && result['result'][i]['scanned'] > 0)
           result['result'][i]['scanned'] = new Date(result['result'][i]['scanned']*1000);
       }
       resultFunction(result);
     }, errorFunction, 'POST', {'text':text});
+  }
+
+  this.testFilter = function(filter, resultFunction, errorFunction) {
+    this.execServer('/document/test', resultFunction, errorFunction, 'POST', {'filter':filter});
   }
 }

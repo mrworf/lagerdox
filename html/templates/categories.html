@@ -1,7 +1,7 @@
 <div class="categories">
 	{{#each result}}
 	<div class="category">
-		<span class="name">{{name}}</span>
+		<span class="name">{{name}}</span> Used <a href="?section=search&q=catid:{{id}}">{{uses}}</a>
 		<button type="button" id="category_delete" data-id="{{id}}">Delete</button>
 		<button type="button" id="category_edit" data-id="{{id}}">Edit</button>
 	</div>
@@ -11,5 +11,6 @@
 		Keywords <input type="text" id="keywords"><br>
 		<button type="button" id="save" style="display: none">Save</button>
 		<button type="button" id="add">Add</button>
+		<button type="button" id="test">Test</button>
 	</div>
 </div>
