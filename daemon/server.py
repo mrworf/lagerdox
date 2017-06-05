@@ -118,6 +118,7 @@ ALLOWED_EXTENSIONS = set(['pdf'])
 
 processList = {}
 feeder = document.Feeder(database, UPLOAD_FOLDER, COMPLETE_FOLDER, THUMB_FOLDER)
+processor = document.Processor(4)
 
 #app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024 # 64MB!
@@ -158,7 +159,8 @@ def generateThumbs(id):
   if not os.path.exists(path):
     os.makedirs(path)
   logging.info('Generating thumbnails for "%s"' % absfile)
-  processList[uid] = {'process' : document.Processor(uid, absfile, path, handleResult, meta), 'mode' : 'thumb', 'extras' : None}
+  processList[uid] = {'process' : document.Process(uid, absfile, path, handleResult, meta), 'mode' : 'thumb', 'extras' : None}
+  processor.add(processList[uid]['process'].run)
 
 @app.route("/upload", methods=['POST'], defaults={'mode' : None})
 @app.route("/upload/<mode>", methods=['POST'])
@@ -187,7 +189,8 @@ def documentUpload(mode):
       ret['result'] = 'OK'
       ret['uid'] = uid
       logging.info('New file received and stored in "%s"' % absfile)
-      processList[uid] = {'process' : document.Processor(uid, absfile, os.path.dirname(absfile), handleResult), 'mode' : mode, 'extras' : request.args}
+      processList[uid] = {'process' : document.Process(uid, absfile, os.path.dirname(absfile), handleResult), 'mode' : mode, 'extras' : request.args}
+      processor.add(processList[uid]['process'].run)
 
   res = jsonify(ret)
   if 'error' in ret:

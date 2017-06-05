@@ -24,7 +24,30 @@ import json
 
 FLAG_MANUAL = 1
 
-class Processor (threading.Thread):
+class Processor:
+  def __init__(self, threads):
+    self.exit = False
+    self.queue = Queue()
+    for w in range(threads):
+      t = threading.Thread(target=self.worker)
+      t.daemon = True
+      t.start()
+
+  def worker(self):
+    while True:
+      work = self.queue.get()
+      work()
+      self.queue.task_done()
+
+  def add(self, process):
+    if self.exit:
+      return
+    self.queue.put(process)
+
+  def stop(self):
+    self.queue.join()
+
+class Process:
   CMD_EXTRACT = 'convert -density 300 -depth 8 %(filename)s[%(page)d] -background white -flatten %(workpath)s/page%(page)03d.png'
   CMD_MULTIPLE = 'zbarimg %(workpath)s/page%(page)03d.png'
   CMD_SPLITTER = 'pdftk %(filename)s cat <pages> output %(dest)s'
@@ -42,9 +65,6 @@ class Processor (threading.Thread):
   MULTIPLE_INDICATOR = 'QR-Code:__SCANNER_DOCUMENT_SEPARATOR__'
 
   def __init__(self, uid, filename, workpath, callback, existing=None):
-    threading.Thread.__init__(self)
-    self.daemon = True
-
     self.callback = callback
     self.filename = filename
     self.workpath = workpath
@@ -52,6 +72,7 @@ class Processor (threading.Thread):
     self.existing = existing
     self.state = {
       'overall' : 'PENDING',
+      'filename' : self.filepart,
       'files' : 0,
       'pages' : 0,
       'file' : 0,
@@ -59,7 +80,6 @@ class Processor (threading.Thread):
       'sub' : ''
     }
     self.uid = uid
-    self.start()
 
   def getState(self):
     return self.state
@@ -169,7 +189,7 @@ class Processor (threading.Thread):
   def detectcolor(self, page, metadata):
     metadata['colors'] = 0
 
-    lines, result = self._execute(Processor.CMD_META_COLOR, {'page' : page})
+    lines, result = self._execute(Process.CMD_META_COLOR, {'page' : page})
     if result == 0 and lines:
       metadata['colors'] = int(lines)
     else:
@@ -182,7 +202,7 @@ class Processor (threading.Thread):
 
   def thumb(self, page, metadata):
     # Reuse pageXXX.png to produce viable thumbnails and avoid render PDF again
-    lines, result = self._execute(Processor.CMD_THUMB_SMALL, {'page' : page, 'rotate' : -metadata['degrees']})
+    lines, result = self._execute(Process.CMD_THUMB_SMALL, {'page' : page, 'rotate' : -metadata['degrees']})
     if result != 0:
       logging.error('Failed to generate small thumb of page %d in "%s"' % (page, self.filepart))
       lines = lines.split('\n')
@@ -190,7 +210,7 @@ class Processor (threading.Thread):
         logging.error('>>> ' + line.strip())
       return False
 
-    lines, result = self._execute(Processor.CMD_THUMB_LARGE, {'page' : page, 'rotate' : -metadata['degrees']})
+    lines, result = self._execute(Process.CMD_THUMB_LARGE, {'page' : page, 'rotate' : -metadata['degrees']})
     if result != 0:
       logging.error('Failed to generate large thumb of page %d in "%s"' % (page, self.filepart))
       lines = lines.split('\n')
@@ -200,7 +220,7 @@ class Processor (threading.Thread):
 
   def ocrpage(self, page, meta):
     meta['ocr'] = False
-    lines, result = self._execute(Processor.CMD_OCR_PAGE, {'page' : page})
+    lines, result = self._execute(Process.CMD_OCR_PAGE, {'page' : page})
     if result != 0:
       logging.error('Failed to OCR page %d in "%s"' % (page, self.filepart))
       lines = lines.split('\n')
@@ -215,8 +235,8 @@ class Processor (threading.Thread):
     meta['blank'] = False
     meta['blank-confidence'] = -1
 
-    graycmd = self._execute(Processor.CMD_META_BLANK1, {'page':page}, True)
-    identcmd = self._execute(Processor.CMD_META_BLANK2, {'page':page}, True)
+    graycmd = self._execute(Process.CMD_META_BLANK1, {'page':page}, True)
+    identcmd = self._execute(Process.CMD_META_BLANK2, {'page':page}, True)
 
     try:
       ident = Popen(identcmd, stdin=PIPE, stdout=PIPE, stderr=STDOUT)
@@ -228,7 +248,7 @@ class Processor (threading.Thread):
       imgmin = float(lines[2])
       imgmax = float(lines[1])
       meta['blank-confidence'] = int(stddev / (imgmax - imgmin) * 10000)
-      meta['blank'] = meta['blank-confidence'] < Processor.BLANK_INDICATOR
+      meta['blank'] = meta['blank-confidence'] < Process.BLANK_INDICATOR
       return True
     except:
       logging.exception('Failed to detect blank page')
@@ -238,7 +258,7 @@ class Processor (threading.Thread):
     '''Detects orientation of page'''
     meta['degrees'] = 0
     meta['confidence'] = 0
-    lines, result = self._execute(Processor.CMD_META_DEGREE, {'page' : page})
+    lines, result = self._execute(Process.CMD_META_DEGREE, {'page' : page})
     if lines:
       for line in lines.split('\n'):
         parts = line.strip().split(':')
@@ -256,12 +276,12 @@ class Processor (threading.Thread):
     for page in range(0, pagelen):
       found = 0
       total = 0
-      lines, result = self._execute(Processor.CMD_MULTIPLE, {'page' : page})
+      lines, result = self._execute(Process.CMD_MULTIPLE, {'page' : page})
 
       if lines:
         for line in lines.split('\n'):
           line = line.strip()
-          if line == Processor.MULTIPLE_INDICATOR:
+          if line == Process.MULTIPLE_INDICATOR:
             found += 1
           else:
             r = re.search('scanned ([0-9]+) barcode', line)
@@ -313,7 +333,7 @@ class Processor (threading.Thread):
     for p in pages:
       adjusted.append(p+1)
 
-    output, result = self._execute(Processor.CMD_SPLITTER, {'dest' : dest, 'pages' : adjusted})
+    output, result = self._execute(Process.CMD_SPLITTER, {'dest' : dest, 'pages' : adjusted})
     if result != 0 or not os.path.exists(dest):
       logging.error('Unable to split "%s" into "%s" (pages %s)' % (self.filepart, dest, repr(pages)))
       lines = output.split('\n')
@@ -327,7 +347,7 @@ class Processor (threading.Thread):
     page = 0
     result = 0
     while result == 0:
-      output, result = self._execute(Processor.CMD_EXTRACT, {'page' : page})
+      output, result = self._execute(Process.CMD_EXTRACT, {'page' : page})
       if result > 0:
         if "Requested FirstPage is greater than the number of pages in the file" not in output:
           lines = output.split('\n')
@@ -630,7 +650,3 @@ class Analyzer:
     logging.debug('Closest match is: %d (%s)' % (closest, time.strftime("%x", sclosest)))
 
     return closest
-
-
-
-
