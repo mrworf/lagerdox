@@ -437,17 +437,19 @@ class Feeder (threading.Thread):
       # This is where we figure out which category to assign
       if mode == 'manual':
         logging.info('Skipping categorization due to manual flag')
+        logging.debug('Extras: ' + repr(extras))
         # Check if we're provided additional information
         changes = {}
         if 'scanned' in extras:
           # Change time of received
-          changes['scanner'] = extras['scanned']
+          changes['scanned'] = extras['scanned']
         if 'received' in extras:
           # What date to put on it
           changes['received'] = extras['received']
         if 'category' in extras:
           # What category to assign
           changes['category'] = extras['category']
+        logging.debug('Pending changes: ' + repr(changes))
         if len(changes):
           self.dbconn.update_document(id, changes)
       elif mode is None:

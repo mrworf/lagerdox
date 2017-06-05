@@ -189,8 +189,9 @@ def documentUpload(mode):
       ret['result'] = 'OK'
       ret['uid'] = uid
       logging.info('New file received and stored in "%s"' % absfile)
-      processList[uid] = {'process' : document.Process(uid, absfile, os.path.dirname(absfile), handleResult), 'mode' : mode, 'extras' : request.args}
+      processList[uid] = {'process' : document.Process(uid, absfile, os.path.dirname(absfile), handleResult), 'mode' : mode, 'extras' : request.form.to_dict()}
       processor.add(processList[uid]['process'].run)
+      print repr(processList[uid])
 
   res = jsonify(ret)
   if 'error' in ret:
