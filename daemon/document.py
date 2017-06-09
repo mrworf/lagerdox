@@ -426,9 +426,17 @@ class Feeder (threading.Thread):
           data = ''
         logging.debug('Adding page %d to document' % (meta['page']+1))
         self.dbconn.add_page(id, meta['page'], meta['ocr'], meta['blank-confidence'], meta['degrees'], meta['confidence'], meta['colors'], data)
-        self.analyzer.updateDate(data)
+        try:
+          self.analyzer.updateDate(data)
+        except:
+          logging.exception('Failed during additon of data to analyzer')
 
-      date = self.analyzer.finishDate()
+      try:
+        date = self.analyzer.finishDate()
+      except:
+        logging.exception('Failed when trying to find origination date, skipped')
+        date = None
+
       if date is not None:
         if not self.dbconn.update_document(id, 'received', str(date)):
           logging.error('Unable to update received date on document')
@@ -540,7 +548,6 @@ class Analyzer:
       re.compile('((?:' + '|'.join(self.MONTHLAST) + '|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|july|August|September|october|November|December) +[0-3]?[0-9][\\., ]+[0-9\\?:]{5,8} +[12][0-9 ]{3,4})', flags),
     ]
 
-
   def beginDate(self, scantime=None):
     self.dates = []
     self.scantime = scantime
@@ -551,7 +558,9 @@ class Analyzer:
     for reg in self.patterns:
       for m in reg.finditer(data):
         logging.debug('Found date candidate: "%s"' % m.group(1))
-        dates.append(m.group(1))
+        # Remove erroneous spaces
+        result = re.sub('([0-9]) ([0-9])', '\g<1>\g<2>', m.group(1))
+        dates.append(result)
     self.dates.extend(dates)
 
   def finishDate(self):
@@ -612,6 +621,7 @@ class Analyzer:
           continue
 
         # One more exception here, if the last bit is 4 and the second to last is more than 4, use last for year
+        logging.debug('Input for mktime: ' + repr(bitsclean))
         if len(bitsclean[2]) > 4 and len(bitsclean[3]) == 4:
           calctime = time.mktime((int(bitsclean[3]), month+1, int(bitsclean[1]), 0, 0, 0, 0, 0, -1))
         else:
