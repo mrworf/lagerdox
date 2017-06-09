@@ -1,3 +1,4 @@
+<div class="paginator"></div>
 {{#each items}}
 <div class="document_item">
   <a href="?section=documents&view={{id}}">
@@ -22,6 +23,6 @@
   </div>
 </div>
 {{else}}
-No result found for search critera, please try again.
+No result found for search critera "{{query}}", please try again.
 {{/each}}
-<div id="paginator"></div>
+<div class="paginator"></div>

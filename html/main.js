@@ -1,6 +1,7 @@
 $( document ).ready(function() {
   var serverName = "magi.sfo.sensenet.nu";
   var client = new LagerDoxClient('http://' + serverName + ':7000/');
+  var maxperpage = 15;
 
   // See http://berzniz.com/post/24743062344/handling-handlebarsjs-like-a-pro
   Handlebars.getTemplate = function(name) {
@@ -22,11 +23,13 @@ $( document ).ready(function() {
 
   function showDocs() {
     $('#content').empty();
+    showProgress('#content');
+
     client.getDocuments(function(obj) {
       var comp = Handlebars.getTemplate('document_list');
 
       // We may need to paginate this if the number of results are too large
-      if (obj['result'].length > 10) {
+      if (obj['result'].length > maxperpage) {
         var comp2 = Handlebars.getTemplate('paginator');
         var page = getUrlParameter("page");
         if (page == null)
@@ -34,11 +37,14 @@ $( document ).ready(function() {
         else
           page = parseInt(page);
 
-        count = Math.ceil(obj['result'].length/10);
-        var subset = obj['result'].slice( (page-1)*10, (page-1)*10+10 );
+        count = Math.ceil(obj['result'].length/maxperpage);
+        var subset = obj['result'].slice( (page-1)*maxperpage, page*maxperpage );
         var pages = []
         for (var i = 1; i <= count; ++i)
-          pages.push(i);
+          if (i == page)
+            pages.push({'page' : i, 'current' : true});
+          else
+            pages.push({'page' : i});
         var paginator = {'pages' : pages, 'section' : 'documents'};
         if (page != 1)
           paginator['prev'] = page-1;
@@ -46,7 +52,7 @@ $( document ).ready(function() {
           paginator['next'] = page+1;
 
         $('#content').html(comp({'server' : serverName, 'items' : subset}));
-        $('#paginator').html(comp2(paginator));
+        $('.paginator').html(comp2(paginator));
       } else {
         $('#content').html(comp({'server' : serverName, 'items' : obj['result']}));
       }
@@ -311,25 +317,35 @@ $( document ).ready(function() {
 
     $('#query').on('keypress', function(event) {
       if(event.keyCode == 13) { // 13 = Enter Key
-        history.pushState(null, "search", "?section=search&q=" + encodeURIComponent($('#query').val()));
-        search($('#query').val());
+        search_validate();
       }
     });
 
     $('#search').on('click', function() {
-      history.pushState(null, "search", "?section=search&q=" + encodeURIComponent($('#query').val()));
-      search($('#query').val());
+      search_validate();
     });
     makeLinksSmarter();
   }
 
+  function search_validate() {
+      if ($('#query').val().trim().length < 3) {
+        alert('You need at least 3 characters to search for');
+        return;
+      }
+
+      history.pushState(null, "search", "?section=search&q=" + encodeURIComponent($('#query').val()));
+      search($('#query').val());
+    }
+
   function search(query) {
     $('#results').empty();
     if (query != null) {
+      query = query.trim();
+      showProgress('#results');
       client.search(query, function(obj) {
         var comp = Handlebars.getTemplate('search_result');
 
-        if (obj['result'].length > 10) {
+        if (obj['result'].length > maxperpage) {
           var comp2 = Handlebars.getTemplate('paginator');
           var page = getUrlParameter("page");
           if (page == null)
@@ -337,21 +353,24 @@ $( document ).ready(function() {
           else
             page = parseInt(page);
 
-          count = Math.ceil(obj['result'].length/10);
-          var subset = obj['result'].slice( (page-1)*10, (page-1)*10+10 );
+          count = Math.ceil(obj['result'].length/maxperpage);
+          var subset = obj['result'].slice( (page-1)*maxperpage, page*maxperpage );
           var pages = []
           for (var i = 1; i <= count; ++i)
-            pages.push(i);
-          var paginator = {'pages' : pages, 'section' : 'search', 'extras' : '&q=' + encodeURIComponent(query)};
+            if (i == page)
+              pages.push({'page' : i, 'current' : true});
+            else
+              pages.push({'page' : i});
+          var paginator = {'current' : page, 'pages' : pages, 'section' : 'search', 'extras' : '&q=' + encodeURIComponent(query)};
           if (page != 1)
             paginator['prev'] = page-1;
           if (page != count)
             paginator['next'] = page+1;
 
-          $('#results').html(comp({'server' : serverName, 'items' : subset}));
-          $('#paginator').html(comp2(paginator));
+          $('#results').html(comp({'query' : query, 'server' : serverName, 'items' : subset}));
+          $('.paginator').html(comp2(paginator));
         } else {
-          $('#results').html(comp({'server' : serverName, 'items' : obj['result']}));
+          $('#results').html(comp({'query' : query, 'server' : serverName, 'items' : obj['result']}));
         }
         makeLinksSmarter();
       });
@@ -373,6 +392,14 @@ $( document ).ready(function() {
       }
     }
     return null;
+  }
+
+  /**
+   * Places a temporary template into dest
+   */
+  function showProgress(dest) {
+    var comp = Handlebars.getTemplate('progress');
+    $(dest).html(comp());
   }
 
   // Add our magic date hlper!

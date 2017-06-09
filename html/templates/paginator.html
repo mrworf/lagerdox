@@ -1,9 +1,19 @@
-{{#if prev}}
-  <a href="?section={{section}}&page={{prev}}{{extras}}">Prev</a>
-{{/if}}
-{{#each pages}}
-  <a href="?section={{../section}}&page={{this}}{{../extras}}">{{this}}</a>
-{{/each}}
-{{#if next}}
-  <a href="?section={{section}}&page={{next}}{{extras}}">Next</a>
-{{/if}}
+<div>
+  {{#if prev}}
+    <a href="?section={{section}}&page={{prev}}{{extras}}">Prev</a>
+  {{else}}
+    Prev
+  {{/if}}
+  {{#each pages}}
+    {{#if current}}
+      {{page}}
+    {{else}}
+      <a href="?section={{../section}}&page={{page}}{{../extras}}">{{page}}</a>
+    {{/if}}
+  {{/each}}
+  {{#if next}}
+    <a href="?section={{section}}&page={{next}}{{extras}}">Next</a>
+  {{else}}
+    Next
+  {{/if}}
+</div>
