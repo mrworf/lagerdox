@@ -14,7 +14,10 @@ LagerDoxClient = function(serverAddress) {
         successFunction(obj);
       },
       error: function(obj, info, t) {
-        console.log("ResultERR: " + info + " from calling " + addr);
+        console.log(obj);
+        if (obj.readyState == 0) {
+          info = 'lagerDOX backend is not responding. Unable to process your request';
+        }
         errorFunction(info);
       }
     }
@@ -132,7 +135,7 @@ LagerDoxClient = function(serverAddress) {
   }
 
   this.genericError = function(result) {
-    alert("AJAX call failed!\nError:" + result['error']);
+    alert(result);
   }
 
   this.deleteDocument = function(id, resultFunction, errorFunction) {
