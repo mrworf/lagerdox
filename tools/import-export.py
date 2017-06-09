@@ -156,7 +156,7 @@ class ImportV1:
       count += 1
       if count < resumeat:
         continue
-      if maximport != -1 and count > maximport:
+      if maximport != -1 and count == maximport:
         logging.error('Maximum number of documents imported (last imported was %d)' % (count-1))
         sys.exit(255)
 
