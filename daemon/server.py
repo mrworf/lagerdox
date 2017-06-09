@@ -21,7 +21,7 @@ import uuid
 import os
 import sys
 import shlex
-
+import time
 import Storage
 import document
 from configuration import Config
@@ -258,8 +258,10 @@ def documentDetails(id):
       if doc is None:
         abort(404)
       else:
-        if doc['offline']:
-          return send_file(filename)
+        if not doc['offline']:
+          #print repr(doc);
+          #represent = '%s.pdf' % time.strftime('%c', time.gmtime(doc['scanned']))
+          return send_file(os.path.join(COMPLETE_FOLDER, doc['filename'])) #, as_attachment=True, attachment_filename=represent)
         else:
           abort(404)
     else:
