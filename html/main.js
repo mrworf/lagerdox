@@ -45,7 +45,7 @@ $( document ).ready(function() {
             pages.push({'page' : i, 'current' : true});
           else
             pages.push({'page' : i});
-        var paginator = {'pages' : pages, 'section' : 'documents'};
+        var paginator = {'total' : obj['result'].length, 'current' : page, 'pages' : pages, 'section' : 'documents'};
         if (page != 1)
           paginator['prev'] = page-1;
         if (page != count)
@@ -361,7 +361,7 @@ $( document ).ready(function() {
               pages.push({'page' : i, 'current' : true});
             else
               pages.push({'page' : i});
-          var paginator = {'current' : page, 'pages' : pages, 'section' : 'search', 'extras' : '&q=' + encodeURIComponent(query)};
+          var paginator = {'current' : page, 'total' : obj['result'].length, 'pages' : pages, 'section' : 'search', 'extras' : '&q=' + encodeURIComponent(query)};
           if (page != 1)
             paginator['prev'] = page-1;
           if (page != count)
@@ -402,7 +402,12 @@ $( document ).ready(function() {
     $(dest).html(comp());
   }
 
-  // Add our magic date hlper!
+  Handlebars.registerHelper('capitalize', function(item) {
+    // Treats the DOT (.) as whitespace, makes appreviations such as J.P.Morgan look better
+    return item.replace(/\w[^\f\n\r\t\v\u00A0\u2028\u2029\. ]*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+  });
+
+  // Convert date into something useful
   Handlebars.registerHelper('dtos', function(date) {
     var d = Math.abs(date.getTime() - Date.now())/86400000;
     if (d <= 1.0) {
@@ -412,6 +417,7 @@ $( document ).ready(function() {
     return date.toLocaleDateString();
   });
 
+  // Loop X times
   Handlebars.registerHelper('loop', function(count, block) {
     var data = '';
     for(var i = 0; i != count; ++i)
@@ -419,10 +425,12 @@ $( document ).ready(function() {
     return data;
   });
 
+  // Add Y to X
   Handlebars.registerHelper('rebase', function(value, howmuch) {
     return value+howmuch;
   });
 
+  // Less than
   Handlebars.registerHelper('lt', function(v1, v2, options) {
     if(v1 > v2) {
       return options.fn(this);

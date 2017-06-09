@@ -1,9 +1,10 @@
 <div class="categories">
 	{{#each result}}
 	<div class="category">
-		<span class="name">{{name}}</span> Used <a href="?section=search&q=catid:{{id}}">{{uses}}</a>
 		<button type="button" id="category_delete" data-id="{{id}}">Delete</button>
 		<button type="button" id="category_edit" data-id="{{id}}">Edit</button>
+		<span class="name">{{capitalize name}}</span>
+		Used <a href="?section=search&q=catid:{{id}}">{{uses}}</a>
 	</div>
 	{{/each}}
 	<div class="add">

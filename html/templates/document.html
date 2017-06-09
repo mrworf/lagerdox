@@ -2,7 +2,7 @@
   <div class="document_info">
     {{#if scanned}}Added {{dtos scanned}}<br>{{/if}}
     {{#if received}}Dated {{dtos received}}<br>{{/if}}
-    {{#if category}}{{category.name}}<br>{{/if}}
+    {{#if category}}{{capitalize category.name}}<br>{{/if}}
     {{#each tags}}
       <button id="tag_delete" data-id="{{../id}}" data-tag="{{id}}">{{name}}</button>
     {{/each}}
