@@ -1,9 +1,13 @@
 <div class="status">
+  {{#if jobs}}
+  Number of jobs in the queue: {{count}}
+  {{/if}}
   {{#each jobs}}
-    File: {{filename}}<br>
-    State: {{overall}} {{#lt files 1}}(document is split, contains {{rebase files 1}} documents){{/lt}}<br>
-    {{#if pages}}Page {{rebase 1 page}} of {{pages}}: {{sub}}{{/if}}
-    <hr>
+  <div data-state="{{overall}}">
+    <span class="state">{{overall}}</span>
+    <span class="filename">{{filename}} {{#lt files 1}}[Part {{rebase file 1}} of {{rebase files 1}}]{{/lt}}</span>
+    <span class="pages">{{#if pages}}Page {{rebase 1 page}} of {{pages}}: {{sub}}{{/if}}</span>
+  </div>
   {{else}}
   idle!
   {{/each}}

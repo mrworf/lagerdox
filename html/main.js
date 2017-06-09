@@ -154,7 +154,6 @@ $( document ).ready(function() {
       });
       $('.page').on('click', 'img', function(e) {
         client.getPageContent(e.target.dataset.id, e.target.dataset.page, function(result) {
-          console.log(e);
           $(e.delegateTarget).html('<pre>' + result['result'] + '</pre>');
         });
       });
@@ -222,6 +221,7 @@ $( document ).ready(function() {
   function refreshStatus(comp) {
     client.getStatus(function(obj) {
       if ($('.status').length) {
+        obj['count'] = obj['jobs'].length;
         $('#content').html(comp(obj));
         setTimeout(function() { refreshStatus(comp); }, 1000);
       }
