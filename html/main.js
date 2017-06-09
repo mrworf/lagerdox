@@ -62,12 +62,20 @@ $( document ).ready(function() {
       $('.document_item').on('click', '#item_download', function(e) {
         downloadDoc(e.target.dataset.id);
       });
+      $('.document_item').on('click', '#item_view', function(e) {
+        viewDoc(e.target.dataset.id);
+      });
+
       makeLinksSmarter();
     });
   }
 
   function downloadDoc(id) {
     window.location.href="http://magi.sfo.sensenet.nu:7000/document/" + id + "/download";
+  }
+
+  function viewDoc(id) {
+    window.location.href="http://magi.sfo.sensenet.nu:7000/document/" + id + "/view";
   }
 
   function deleteDoc(id, success) {
@@ -111,6 +119,9 @@ $( document ).ready(function() {
       });
       $('#item_download').on('click', function(e) {
         downloadDoc(e.target.dataset.id);
+      });
+      $('#item_view').on('click', function(e) {
+        viewDoc(e.target.dataset.id);
       });
       $('#item_category').on('click', function(e) {
         var comp = Handlebars.getTemplate('category_selectbox');
@@ -372,6 +383,16 @@ $( document ).ready(function() {
         } else {
           $('#results').html(comp({'query' : query, 'server' : serverName, 'items' : obj['result']}));
         }
+        $('.document_item').on('click', '#item_delete', function(e) {
+          deleteDoc(e.target.dataset.id, function() { $(e.delegateTarget).remove(); });
+        });
+        $('.document_item').on('click', '#item_download', function(e) {
+          downloadDoc(e.target.dataset.id);
+        });
+        $('.document_item').on('click', '#item_view', function(e) {
+          viewDoc(e.target.dataset.id);
+        });
+
         makeLinksSmarter();
       });
     }
