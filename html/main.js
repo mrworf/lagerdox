@@ -21,18 +21,42 @@ $( document ).ready(function() {
 
 
   function showDocs() {
-    history.replaceState(null, "upload", "?section=documents");
     $('#content').empty();
     client.getDocuments(function(obj) {
-      //console.log(obj);
       var comp = Handlebars.getTemplate('document_list');
-      $('#content').html(comp({'server' : serverName, 'items' : obj['result']}));
+
+      // We may need to paginate this if the number of results are too large
+      if (obj['result'].length > 10) {
+        var comp2 = Handlebars.getTemplate('paginator');
+        var page = getUrlParameter("page");
+        if (page == null)
+          page = 1;
+        else
+          page = parseInt(page);
+
+        count = Math.ceil(obj['result'].length/10);
+        var subset = obj['result'].slice( (page-1)*10, (page-1)*10+10 );
+        var pages = []
+        for (var i = 1; i <= count; ++i)
+          pages.push(i);
+        var paginator = {'pages' : pages, 'section' : 'documents'};
+        if (page != 1)
+          paginator['prev'] = page-1;
+        if (page != count)
+          paginator['next'] = page+1;
+
+        $('#content').html(comp({'server' : serverName, 'items' : subset}));
+        $('#paginator').html(comp2(paginator));
+      } else {
+        $('#content').html(comp({'server' : serverName, 'items' : obj['result']}));
+      }
       $('.document_item').on('click', '#item_delete', function(e) {
         deleteDoc(e.target.dataset.id, function() { $(e.delegateTarget).remove(); });
       });
       $('.document_item').on('click', '#item_download', function(e) {
         downloadDoc(e.target.dataset.id);
       });
+      makeLinksSmarter();
     });
   }
 
@@ -68,7 +92,8 @@ $( document ).ready(function() {
   }
 
   function showDoc(id) {
-    history.replaceState(null, "upload", "?section=documents&view=" + id);
+    if (getUrlParameter('view') != id)
+      history.pushState(null, "upload", "?section=documents&view=" + id);
     $('#content').empty();
     client.getDocument(id, function(obj) {
       obj = obj['result'];
@@ -127,13 +152,13 @@ $( document ).ready(function() {
           $(e.delegateTarget).html('<pre>' + result['result'] + '</pre>');
         });
       });
+      makeLinksSmarter();
     }, function() {
       showDocs();
     });
   }
 
   function showTags() {
-    history.replaceState(null, "upload", "?section=tags");
     $('#content').empty();
     client.getTags(function(obj) {
       var comp = Handlebars.getTemplate('tags');
@@ -167,8 +192,6 @@ $( document ).ready(function() {
         } else if ($('#name').val().trim() == $('#name').data('org')) {
           showTags();
         } else if ($('#save').data('id') == undefined) {
-          console.log('Target is undefined');
-          console.log(e);
           showTags();
         } else {
           client.editTag($('#save').data('id'), $('#name').val(), function(result) {
@@ -176,6 +199,7 @@ $( document ).ready(function() {
           });
         }
       });
+      makeLinksSmarter();
     });
   }
 
@@ -183,8 +207,6 @@ $( document ).ready(function() {
   function showStatus() {
     if ($('.status').length)
       return;
-
-    history.replaceState(null, "upload", "?section=status");
     $('#content').empty();
     var comp = Handlebars.getTemplate('status');
     $('#content').html('<div class="status"></div>');
@@ -201,7 +223,6 @@ $( document ).ready(function() {
   }
 
   function showCategories() {
-    history.replaceState(null, "upload", "?section=categories");
     $('#content').empty();
     client.getCategories(function(obj) {
       var comp = Handlebars.getTemplate('categories');
@@ -258,11 +279,11 @@ $( document ).ready(function() {
           });
         }
       });
+      makeLinksSmarter();
     });
   }
 
   function showUpload() {
-    history.replaceState(null, "upload", "?section=upload");
     $('#content').empty();
     var comp = Handlebars.getTemplate('upload');
     $('#content').html(comp({'server':'magi.sfo.sensenet.nu:7000'}));
@@ -282,11 +303,6 @@ $( document ).ready(function() {
 
   function showSearch() {
     var q = getUrlParameter('q');
-    if (q != null) {
-      history.replaceState(null, "search", "?section=search&q=" + encodeURIComponent(q));
-    } else {
-      history.replaceState(null, "search", "?section=search");
-    }
     $('#content').empty();
     var comp = Handlebars.getTemplate('search');
     $('#content').html(comp());
@@ -295,24 +311,49 @@ $( document ).ready(function() {
 
     $('#query').on('keypress', function(event) {
       if(event.keyCode == 13) { // 13 = Enter Key
+        history.pushState(null, "search", "?section=search&q=" + encodeURIComponent($('#query').val()));
         search($('#query').val());
       }
     });
 
     $('#search').on('click', function() {
+      history.pushState(null, "search", "?section=search&q=" + encodeURIComponent($('#query').val()));
       search($('#query').val());
     });
+    makeLinksSmarter();
   }
 
   function search(query) {
     $('#results').empty();
-    if (query == null) {
-      history.replaceState(null, "search", "?section=search");
-    } else {
-      history.replaceState(null, "search", "?section=search&q=" + encodeURIComponent(query));
-      client.search(query, function(result) {
+    if (query != null) {
+      client.search(query, function(obj) {
         var comp = Handlebars.getTemplate('search_result');
-        $('#results').html(comp({'server' : serverName, 'items' : result['result']}));
+
+        if (obj['result'].length > 10) {
+          var comp2 = Handlebars.getTemplate('paginator');
+          var page = getUrlParameter("page");
+          if (page == null)
+            page = 1;
+          else
+            page = parseInt(page);
+
+          count = Math.ceil(obj['result'].length/10);
+          var subset = obj['result'].slice( (page-1)*10, (page-1)*10+10 );
+          var pages = []
+          for (var i = 1; i <= count; ++i)
+            pages.push(i);
+          var paginator = {'pages' : pages, 'section' : 'search', 'extras' : '&q=' + encodeURIComponent(query)};
+          if (page != 1)
+            paginator['prev'] = page-1;
+          if (page != count)
+            paginator['next'] = page+1;
+
+          $('#results').html(comp({'server' : serverName, 'items' : subset}));
+          $('#paginator').html(comp2(paginator));
+        } else {
+          $('#results').html(comp({'server' : serverName, 'items' : obj['result']}));
+        }
+        makeLinksSmarter();
       });
     }
   }
@@ -365,31 +406,50 @@ $( document ).ready(function() {
   var menu = Handlebars.getTemplate('menu');
   $('#header').html(menu());
 
-  section = getUrlParameter("section");
-  switch (section) {
-    case 'search':
-      showSearch();
-      break;
-    case 'upload':
-      showUpload();
-      break;
-    case 'categories':
-      showCategories();
-      break;
-    case 'tags':
-      showTags();
-      break;
-    case 'status':
-      showStatus();
-      break;
-    case 'documents':
-    default:
-      var doc = getUrlParameter('view');
-      if (doc)
-        showDoc(doc);
-      else
-        showDocs();
-      break;
+  function processRequest() {
+    section = getUrlParameter("section");
+    switch (section) {
+      case 'search':
+        showSearch();
+        break;
+      case 'upload':
+        showUpload();
+        break;
+      case 'categories':
+        showCategories();
+        break;
+      case 'tags':
+        showTags();
+        break;
+      case 'status':
+        showStatus();
+        break;
+      case 'documents':
+      default:
+        if (section != 'documents')
+          history.replaceState(null, '', '?section=documents');
+        var doc = getUrlParameter('view');
+        if (doc)
+          showDoc(doc);
+        else
+          showDocs();
+        break;
+    }
   }
+
+  function makeLinksSmarter() {
+    $('a').off('click').on('click', function(obj) {
+      history.pushState(null, '', $(obj.currentTarget).attr('href'));
+      processRequest();
+      return false;
+    });
+  }
+
+  // Capture browser back/forward and evaluate URL
+  $(window).on('popstate', function() {
+    processRequest();
+  });
+
+  processRequest();
 
 });

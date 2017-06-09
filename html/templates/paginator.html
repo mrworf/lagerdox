@@ -1,0 +1,9 @@
+{{#if prev}}
+  <a href="?section={{section}}&page={{prev}}{{extras}}">Prev</a>
+{{/if}}
+{{#each pages}}
+  <a href="?section={{../section}}&page={{this}}{{../extras}}">{{this}}</a>
+{{/each}}
+{{#if next}}
+  <a href="?section={{section}}&page={{next}}{{extras}}">Next</a>
+{{/if}}
