@@ -253,6 +253,7 @@ def documentTag(id, tag):
 
 @app.route("/document/<id>", methods=['GET','DELETE'])
 @app.route("/document/<id>/download", methods=['GET'])
+@app.route("/document/<id>/view", methods=['GET'])
 @app.route("/document/<id>/update", methods=['POST', 'DELETE'])
 def documentDetails(id):
   ret = {}
@@ -261,7 +262,7 @@ def documentDetails(id):
     if doc:
       doc['offline'] = not hasDocument(doc['filename'])
 
-    if request.path.endswith('/download'):
+    if request.path.endswith('/view'):
       if doc is None:
         abort(404)
       else:
@@ -269,6 +270,16 @@ def documentDetails(id):
           #print repr(doc);
           #represent = '%s.pdf' % time.strftime('%c', time.gmtime(doc['scanned']))
           return send_file(os.path.join(COMPLETE_FOLDER, doc['filename'])) #, as_attachment=True, attachment_filename=represent)
+        else:
+          abort(404)
+    elif request.path.endswith('/download'):
+      if doc is None:
+        abort(404)
+      else:
+        if not doc['offline']:
+          #print repr(doc);
+          represent = '%s.pdf' % time.strftime('%c', time.gmtime(doc['scanned']))
+          return send_file(os.path.join(COMPLETE_FOLDER, doc['filename']), as_attachment=True, attachment_filename=represent)
         else:
           abort(404)
     else:
