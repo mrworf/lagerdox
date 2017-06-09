@@ -6,6 +6,7 @@
     {{#each tags}}
       <button id="tag_delete" data-id="{{../id}}" data-tag="{{id}}">{{name}}</button>
     {{/each}}
+    {{#if offline}}DOCUMENT UNAVAILABLE<br>{{/if}}
     <button id="item_tag" data-id="{{id}}">Add...</button>
     <br>
     <hr>
@@ -15,9 +16,12 @@
     <button id="item_download" data-id="{{id}}">Download</button>
     <button id="item_category" data-id="{{id}}">Category</button>
   </div>
-  {{#each page}}
-    <div class="page">
-      <img src="http://{{../server}}:7000/document/{{id}}/large/{{page}}" title="Page {{rebase page 1}} of {{../pages}}" data-id="{{id}}" data-page="{{page}}" />
-    </div>
-  {{/each}}
+  {{#if offline}}
+  {{else}}
+    {{#each page}}
+      <div class="page">
+        <img src="http://{{../server}}:7000/document/{{id}}/large/{{page}}" title="Page {{rebase page 1}} of {{../pages}}" data-id="{{id}}" data-page="{{page}}" />
+      </div>
+    {{/each}}
+  {{/if}}
 </div>

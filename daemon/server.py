@@ -17,7 +17,6 @@
 #
 
 import logging
-import argparse
 import uuid
 import os
 import sys
@@ -25,23 +24,13 @@ import shlex
 
 import Storage
 import document
+from configuration import Config
 
-""" Parse command line """
-parser = argparse.ArgumentParser(description="lagerDox - Your personal storage of documents", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--logfile', metavar="FILE", help="Log to file instead of stdout")
-parser.add_argument('--port', default=7000, type=int, help="Port to listen on")
-parser.add_argument('--listen', metavar="ADDRESS", default="0.0.0.0", help="Address to listen on")
-parser.add_argument('--database', metavar='DATABASE', help='Which database to use')
-parser.add_argument('--dbserver', metavar="SERVER", help='Server running mySQL or MariaDB')
-parser.add_argument('--dbuser', metavar='USER', help='Username for server access')
-parser.add_argument('--dbpassword', metavar='PASSWORD', help='Password for server access')
-parser.add_argument('--setup', action='store_true', default=False, help="Create necessary tables")
-parser.add_argument('--force', action='store_true', default=False, help="Causes setup to delete tables if necessary (NOTE! YOU'LL LOSE ALL EXISTING DATA)")
-cmdline = parser.parse_args()
+config = Config()
 
 """ Setup logging first """
 logging.getLogger('').handlers = []
-logging.basicConfig(filename=cmdline.logfile, level=logging.DEBUG, format='%(asctime)s - %(filename)s@%(lineno)d - %(levelname)s - %(message)s')
+logging.basicConfig(filename=config.get('general', 'logfile'), level=logging.DEBUG, format='%(asctime)s - %(filename)s@%(lineno)d - %(levelname)s - %(message)s')
 
 """ Continue with the rest """
 from tornado.wsgi import WSGIContainer
@@ -70,11 +59,11 @@ logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 """ Initiate database connection """
 database = Storage.MariaDB()
-if not database.connect(cmdline.dbuser, cmdline.dbpassword, cmdline.dbserver, cmdline.database):
+if not database.connect(config.get('database', 'username'), config.get('database', 'password'), config.get('database', 'host'), config.get('database', 'database')):
   sys.exit(1)
 
-if cmdline.setup:
-  if database.setup(cmdline.force):
+if config.get('', 'setup'):
+  if database.setup(config.get('', 'force')):
     logging.info('Tables created successfully')
     database.prepare()
     sys.exit(0)
@@ -91,37 +80,31 @@ elif result != Storage.VALIDATION_OK:
   sys.exit(1)
 
 database.prepare()
-"""
-a = document.Analyzer()
-a.beginDate()
-
-i = database.query_pages(12)
-while True:
-  data = i.next()
-  if data is None:
-    break
-  data = data['content']
-  a.updateDate(data)
-i = a.finishDate()
-
-sys.exit(0)
-"""
 
 """ Initialize the REST server """
 app = Flask(__name__)
 cors = CORS(app) # Needed to make us CORS compatible
 
-UPLOAD_FOLDER = '/tmp/lagerDox/'
-COMPLETE_FOLDER = '/tmp/lagerDox/done/'
-THUMB_FOLDER = '/tmp/lagerDox/thumbs/'
-ALLOWED_EXTENSIONS = set(['pdf'])
+""" ================= """
+
+# Should move all of this into a class and avoid having all the code inside the
+# REST calls.
+
+UPLOAD_FOLDER = config.get('paths', 'upload')
+COMPLETE_FOLDER = config.get('paths', 'complete')
+THUMB_FOLDER = config.get('paths', 'thumbnails')
+ALLOWED_EXTENSIONS = set(config.get('limits', 'extensions'))
 
 processList = {}
 feeder = document.Feeder(database, UPLOAD_FOLDER, COMPLETE_FOLDER, THUMB_FOLDER)
-processor = document.Processor(4)
+processor = document.Processor(config.get('limits', 'jobs'))
 
 #app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024 # 64MB!
+app.config['MAX_CONTENT_LENGTH'] = config.get('limits', 'file size')
+
+def hasDocument(filename):
+  filename = os.path.join(COMPLETE_FOLDER, filename)
+  return os.path.exists(filename)
 
 def allowed_file(filename):
   return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -268,12 +251,17 @@ def documentDetails(id):
   ret = {}
   if request.method == 'GET':
     doc = database.query_document(int(id))
+    if doc:
+      doc['offline'] = not hasDocument(doc['filename'])
+
     if request.path.endswith('/download'):
       if doc is None:
         abort(404)
       else:
-        filename = os.path.join(COMPLETE_FOLDER, doc['filename'])
-        return send_file(filename)
+        if doc['offline']:
+          return send_file(filename)
+        else:
+          abort(404)
     else:
       if doc is None:
         ret['error'] = 'No such document'
@@ -294,6 +282,8 @@ def documentDetails(id):
     else:
       # First, get info about the doc, since we need to delete it physically too
       doc = database.query_document(int(id))
+      if doc:
+        doc['offline'] = not hasDocument(doc['filename'])
       if doc is None:
         ret['error'] = 'No such document'
       else:
@@ -347,7 +337,9 @@ def documentGetPage(id, page):
 @app.route("/document/<id>/large/<thumb>", methods=['GET'])
 def documentThumbnail(id, thumb):
   doc = database.query_document(int(id))
-  if doc is None or int(thumb) >= doc['pages']:
+  if doc and not hasDocument(doc['filename']):
+    abort(404)
+  elif doc is None or int(thumb) >= doc['pages']:
     ret = {'error' : 'Invalid document or page'}
   elif '/small/' in request.path:
     filename = os.path.join(THUMB_FOLDER, doc['filename'][:-4], 'small%003d.jpg' % int(thumb))
@@ -451,6 +443,7 @@ def documentList():
   ret = {'result' : []}
 
   for entry in database.query_documents():
+    entry['offline'] = not hasDocument(entry['filename'])
     ret['result'].append(entry)
 
   res = jsonify(ret)
@@ -490,6 +483,7 @@ def search():
     logging.debug('Query: ' + repr(query))
 
     for entry in database.query_all(query):
+      entry['offline'] = not hasDocument(entry['filename'])
       ret['result'].append(entry)
 
   res = jsonify(ret)
@@ -554,11 +548,11 @@ def tagEdit(id):
 """ Finally, launch! """
 if __name__ == "__main__":
   app.debug = False
-  logging.info("lagerDox running on port %d" % cmdline.port)
+  logging.info("lagerDox running on port %d" % config.get('general', 'port'))
   container = WSGIContainer(app)
   server = Application([
     #(r'/events/(.*)', WebSocket),
     (r'.*', FallbackHandler, dict(fallback=container))
     ])
-  server.listen(cmdline.port)
+  server.listen(config.get('general', 'port'))
   IOLoop.instance().start()

@@ -3,6 +3,7 @@
 DATABASE=lagerdoxdbg
 USERNAME=lager
 PASSWORD=dox
+CONFIG=lagerdox.conf
 
 ARGS=$1
 
@@ -12,4 +13,4 @@ if [ "$1" = "live" ]; then
 fi
 
 echo "===[ Using ${DATABASE} ]==="
-./server.py --database ${DATABASE} --dbuser ${USERNAME} --dbpass ${PASSWORD} $ARGS
+./server.py --database ${DATABASE} --dbuser ${USERNAME} --dbpass ${PASSWORD} ${CONFIG} $ARGS

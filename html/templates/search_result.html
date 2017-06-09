@@ -1,13 +1,18 @@
 {{#each items}}
 <div class="document_item">
   <a href="?section=documents&view={{id}}">
+    {{#if offline}}
+    <img src="">
+    {{else}}
     <img src="http://{{../server}}:7000/document/{{id}}/small/{{page}}" />
+    {{/if}}
   </a>
   <div class="document_info">
     {{#if scanned}}Added {{dtos scanned}}<br>{{/if}}
     {{#if received}}Dated {{dtos received}}<br>{{/if}}
     {{#if category}}{{category.name}}<br>{{/if}}
     {{#if tags}}{{#each tags}}{{name}} {{/each}}<br>{{/if}}
+    {{#if offline}}DOCUMENT UNAVAILABLE<br>{{/if}}
     <hr>
     Found in page {{rebase page 1}} of {{pages}}<br>
     Score {{score}}<br>

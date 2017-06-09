@@ -546,6 +546,17 @@ class MariaDB:
       qfield += ',MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE) AS score' % self.cnx.converter.escape(keys['text'])
       qwhere += 'MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE)'  % self.cnx.converter.escape(keys['text'])
 
+    # Add any special modifiers...
+    for include in keys['modifier']['include']:
+      if 'catid' in include:
+        qwhere += 'AND documents.category = %d ' % int(include['catid'])
+
+    # Strip first part to make sure we're a query
+    if qwhere.startswith('AND '):
+      qwhere = qwhere[4:]
+    elif qwhere.startswith('OR '):
+      qwhere = qwhere[3:]
+
     query = 'SELECT ' + qfield + ' FROM ' + qtables + ' WHERE ' + qwhere + ' GROUP BY ' + qgroup + ' ORDER BY ' + qorder
 
     cursor = self.getCursor(dictionary=True, buffered=True)
@@ -634,7 +645,11 @@ class Iterator:
     """
     if self.error is not None:
       raise StopIteration
-    rec = self.cursor.fetchone()
+    if self.cursor is not None:
+      rec = self.cursor.fetchone()
+    else:
+      logging.warning('Cursor was None')
+      rec = None
     if rec is None:
       raise StopIteration
     elif self.process is not None:
