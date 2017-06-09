@@ -57,6 +57,8 @@ i1 = subp.add_parser('importv1', help='Import the metadata and documents of a La
 i1.add_argument('server', metavar='SERVER', help='LagerDOX v2 server URL')
 i1.add_argument('json', help="File with backed up metadata")
 i1.add_argument('basedir', help='Base directory where to find documents referred to in backup')
+i1.add_argument('--resume', help='Continues the import at document specified, useful if you get an error')
+i1.add_argument('--max', help='Sets a limit on how many to import')
 
 parser.add_argument('--logfile', metavar="FILE", help="Log to file instead of stdout")
 cmdline = parser.parse_args()
@@ -139,18 +141,41 @@ class ImportV1:
 
     logging.info('Processing documents and adding to server (via HTTP upload)')
 
+    count = 0
+    if cmdline.resume:
+      resumeat = int(cmdline.resume)
+    else:
+      resumeat = 0
+
+    if cmdline.max:
+      maximport = int(cmdline.max) + resumeat
+    else:
+      maximport = -1
+
     for doc in j['documents']:
-      print repr(doc)
+      count += 1
+      if count < resumeat:
+        continue
+      if maximport != -1 and count > maximport:
+        logging.error('Maximum number of documents imported (last imported was %d)' % (count-1))
+        sys.exit(255)
+
       parts = doc['filename'].split('/')
+
+      logging.info('Importing "%s/%s"' % (parts[-2], parts[-1]))
+
       filename = self.basedir + '/' + parts[-2] + '/' + parts[-1]
       files = {'file' : open(filename, 'rb')}
       values = {'scanned':doc['added'], 'received':doc['dated'], 'category' : self.resolveCategory(doc['category'])}
-      r = requests.post(self.server + '/upload/manual', files=files, data=values)
-      print repr(values)
-      print repr(r.status_code)
-      print repr(r.content)
-      print repr(r.json())
-      sys.exit(0)
+      try:
+        r = requests.post(self.server + '/upload/manual', files=files, data=values)
+        if r.status_code != 200:
+          raise Exception('Server responded with error ' + r.status_code)
+      except:
+        logging.exception('Failed upload document #%d' % count)
+        logging.error('Request details: ' + repr(values))
+        logging.error('Result (RAW): ' + repr(r.content))
+        sys.exit(255)
 
 
 class ExportV1:
