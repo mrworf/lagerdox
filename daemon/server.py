@@ -185,9 +185,16 @@ def documentUpload(mode):
 
 @app.route("/status", methods=['GET'])
 def getStatus():
-  ret = {'jobs' : {} }
+  ret = {'jobs' : [] }
+  first = []
+  last = []
   for p in processList:
-    ret['jobs'][p] = processList[p]['process'].getState()
+    state = processList[p]['process'].getState()
+    if state['overall'] == 'PENDING':
+      last.append(state)
+    else:
+      first.append(state)
+  ret['jobs'] = first + last
   res = jsonify(ret)
   res.status_code = 200
   return res
