@@ -550,6 +550,11 @@ class MariaDB:
     for include in keys['modifier']['include']:
       if 'catid' in include:
         qwhere += 'AND documents.category = %d ' % int(include['catid'])
+      elif 'blank' in include:
+        if include['blank'] == 'yes':
+          qwhere += 'AND pages.blankness < 200'
+        else:
+          qwhere += 'AND pages.blankness > 199'
 
     # Strip first part to make sure we're a query
     if qwhere.startswith('AND '):
