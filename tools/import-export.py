@@ -66,6 +66,7 @@ cmdline = parser.parse_args()
 """ Setup logging first """
 logging.getLogger('').handlers = []
 logging.basicConfig(filename=cmdline.logfile, level=logging.DEBUG, format='%(asctime)s - %(filename)s@%(lineno)d - %(levelname)s - %(message)s')
+logging.getLogger("connectionpool").setLevel(logging.ERROR)
 
 class ImportV1:
   def __init__(self):
@@ -98,15 +99,20 @@ class ImportV1:
     if r.status_code == 200:
       j = r.json();
       if 'result' in j:
-        return j['result']
+        return int(j['result'])
       logging.error('Failed to add category: ' + j['error'])
     return None
 
   def resolveCategory(self, id):
+    # No category
+    if id == 0:
+      return 0
+    # Resolve mapping
     for m in self.mapping:
       if m['backup'] == id:
         return m['live']
     logging.warn('Unable to resolve category %d' % id)
+    sys.exit(255)
     return 0
 
   def process(self, filename):
@@ -131,12 +137,11 @@ class ImportV1:
         mapCat.append({'backup' : item['id'], 'live' : has['id']})
       else:
         # We need to create this category
-        createCat.append({'name':item['name'], 'filter':item['keywords']})
+        createCat.append({'id' : item['id'], 'name':item['name'], 'filter':item['keywords']})
     if len(createCat) > 0:
       for n in createCat:
-        logging.debug('Creating new category "%s" with "%s" filter' % (n['name'], n['filter']))
         id = self.createCategory(n['name'], n['filter'])
-        mapCat.append({'backup' : item['id'], 'live' : id})
+        mapCat.append({'backup' : n['id'], 'live' : id})
     self.mapping = mapCat
 
     logging.info('Processing documents and adding to server (via HTTP upload)')
@@ -154,6 +159,8 @@ class ImportV1:
 
     for doc in j['documents']:
       count += 1
+      logging.debug('Processing %d of %d' % (count, len(j['documents'])))
+
       if count < resumeat:
         continue
       if maximport != -1 and count == maximport:
