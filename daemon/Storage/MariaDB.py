@@ -610,6 +610,8 @@ class MariaDB:
 
     if sortby:
       query += ' ORDER BY %s' % sortby
+    else:
+      query += ' ORDER BY received DESC, scanned DESC'
 
     #logging.debug('Query statement: ' + query)
 
