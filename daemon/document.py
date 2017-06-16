@@ -581,12 +581,18 @@ class Analyzer:
         del bits[3]
       elif len(bits) == 4 and len(bits[1]) == 1 and len(bits[2]) == 1 and (len(bits[3]) == 2 or len(bits[3]) == 4):
         # Looks like a MM D D YY(YY) version, merge bits 2 into 1
-        bits[1] += bits[2]
-        bitsclean[1] += bitsclean[2]
-        bits[2] = bits[3]
-        bitsclean[2] = bitsclean[3]
-        del bits[3]
-        del bitsclean[3]
+        try:
+          bits[1] += bits[2]
+          bitsclean[1] += bitsclean[2]
+          bits[2] = bits[3]
+          bitsclean[2] = bitsclean[3]
+          del bits[3]
+          del bitsclean[3]
+        except:
+          logging.exception('Failed to remove bits')
+          logging.debug('bits = ' + repr(bits))
+          logging.debug('bitsclean = ' + repr(bitsclean))
+          continue # Skip
       elif len(bits) == 4 and (len(bits[2]) > 4 or len(bits[2]) == 4):
         # Looks like a MM DD HH:MM:SS YY(YY) version
         pass
@@ -597,8 +603,12 @@ class Analyzer:
       calctime = 0
       if bits[0].isdigit() and bits[1].isdigit() and bits[2].isdigit():
         # It's a completely numeric date. We're assuming it's a US date (MM DD YYYY)
+        if int(bits[2]) < 1970 or int(bits[2]) > 2200:
+          continue
         calctime = time.mktime((int(bits[2]), int(bits[0]), int(bits[1]), 0, 0, 0, 0, 0, -1))
       elif bitsclean[0].isdigit() and bitsclean[1].isdigit() and bitsclean[2].isdigit():
+        if int(bitsclean[2]) < 1970 or int(bitsclean[2]) > 2200:
+          continue
         calctime = time.mktime((int(bitsclean[2]), int(bitsclean[0]), int(bitsclean[1]), 0, 0, 0, 0, 0, -1))
       elif bitsclean[0].isdigit() and not bitsclean[1].isdigit() and bitsclean[2].isdigit():
         # Uses text, assuming DD MMM(MMM) YYYY
@@ -610,6 +620,8 @@ class Analyzer:
         if month == -1:
           continue
 
+        if int(bitsclean[2]) < 1970 or int(bitsclean[2]) > 2200:
+          continue
         calctime = time.mktime((int(bitsclean[2]), month+1, int(bitsclean[0]), 0, 0, 0, 0, 0, -1))
       else:
         # Uses text, assuming MMM(MMM) DD YYYY
@@ -621,10 +633,13 @@ class Analyzer:
           continue
 
         # One more exception here, if the last bit is 4 and the second to last is more than 4, use last for year
-        logging.debug('Input for mktime: ' + repr(bitsclean))
         if len(bitsclean[2]) > 4 and len(bitsclean[3]) == 4:
+          if int(bitsclean[3]) < 1970 or int(bitsclean[3]) > 2200:
+            continue
           calctime = time.mktime((int(bitsclean[3]), month+1, int(bitsclean[1]), 0, 0, 0, 0, 0, -1))
         else:
+          if int(bitsclean[2]) < 1970 or int(bitsclean[2]) > 2200:
+            continue
           calctime = time.mktime((int(bitsclean[2]), month+1, int(bitsclean[1]), 0, 0, 0, 0, 0, -1))
 
       logging.debug('Date "%s" translates to "%s"' % (dateclean, time.strftime('%c', time.localtime(calctime))))
