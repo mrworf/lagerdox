@@ -21,6 +21,43 @@ $( document ).ready(function() {
   };
 
 
+  function generatePaginator(section, obj, extras) {
+    var comp2 = Handlebars.getTemplate('paginator');
+    var page = getUrlParameter("page");
+    if (page == null)
+      page = 1;
+    else
+      page = parseInt(page);
+
+    count = Math.ceil(obj['result'].length/maxperpage);
+    var subset = obj['result'].slice( (page-1)*maxperpage, page*maxperpage );
+    var pages = []
+
+    var pstart = Math.max(1, page-5);
+    var pend = Math.min(count, page+5);
+    if (pend - pstart < 10 && count > 9) {
+      if (pend != count)
+        pend += 10 - (pend - pstart);
+      else if (pstart != 1)
+        pstart -= 10 - (pend - pstart);
+    }
+    for (var i = pstart; i <= pend; ++i)
+      if (i == page)
+        pages.push({'page' : i, 'current' : true});
+      else
+        pages.push({'page' : i});
+    var paginator = {'results' : obj['result'].length, 'pagecount' : count, 'current' : page, 'pages' : pages, 'section' : section};
+    if (extras != null)
+      paginator['extras'] = extras;
+
+    if (page != 1)
+      paginator['prev'] = page-1;
+    if (page != count)
+      paginator['next'] = page+1;
+
+    return {'html' : comp2(paginator), 'subset' : subset};
+  }
+
   function showDocs() {
     $('#content').empty();
     showProgress('#content');
@@ -30,29 +67,9 @@ $( document ).ready(function() {
 
       // We may need to paginate this if the number of results are too large
       if (obj['result'].length > maxperpage) {
-        var comp2 = Handlebars.getTemplate('paginator');
-        var page = getUrlParameter("page");
-        if (page == null)
-          page = 1;
-        else
-          page = parseInt(page);
-
-        count = Math.ceil(obj['result'].length/maxperpage);
-        var subset = obj['result'].slice( (page-1)*maxperpage, page*maxperpage );
-        var pages = []
-        for (var i = 1; i <= count; ++i)
-          if (i == page)
-            pages.push({'page' : i, 'current' : true});
-          else
-            pages.push({'page' : i});
-        var paginator = {'total' : obj['result'].length, 'current' : page, 'pages' : pages, 'section' : 'documents'};
-        if (page != 1)
-          paginator['prev'] = page-1;
-        if (page != count)
-          paginator['next'] = page+1;
-
-        $('#content').html(comp({'server' : serverName, 'items' : subset}));
-        $('.paginator').html(comp2(paginator));
+        var paginator = generatePaginator('documents', obj)
+        $('#content').html(comp({'server' : serverName, 'items' : paginator['subset']}));
+        $('.paginator').html(paginator['html']);
       } else {
         $('#content').html(comp({'server' : serverName, 'items' : obj['result']}));
       }
@@ -357,29 +374,9 @@ $( document ).ready(function() {
         var comp = Handlebars.getTemplate('search_result');
 
         if (obj['result'].length > maxperpage) {
-          var comp2 = Handlebars.getTemplate('paginator');
-          var page = getUrlParameter("page");
-          if (page == null)
-            page = 1;
-          else
-            page = parseInt(page);
-
-          count = Math.ceil(obj['result'].length/maxperpage);
-          var subset = obj['result'].slice( (page-1)*maxperpage, page*maxperpage );
-          var pages = []
-          for (var i = 1; i <= count; ++i)
-            if (i == page)
-              pages.push({'page' : i, 'current' : true});
-            else
-              pages.push({'page' : i});
-          var paginator = {'current' : page, 'total' : obj['result'].length, 'pages' : pages, 'section' : 'search', 'extras' : '&q=' + encodeURIComponent(query)};
-          if (page != 1)
-            paginator['prev'] = page-1;
-          if (page != count)
-            paginator['next'] = page+1;
-
-          $('#results').html(comp({'query' : query, 'server' : serverName, 'items' : subset}));
-          $('.paginator').html(comp2(paginator));
+          var paginator = generatePaginator('search', obj, '&q=' + encodeURIComponent(query));
+          $('#results').html(comp({'query' : query, 'server' : serverName, 'items' : paginator['subset']}));
+          $('.paginator').html(paginator['html']);
         } else {
           $('#results').html(comp({'query' : query, 'server' : serverName, 'items' : obj['result']}));
         }

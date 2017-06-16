@@ -9,8 +9,8 @@
     {{/if}}
   </a>
   <div class="document_info">
-    {{#if scanned}}Added {{dtos scanned}}<br>{{/if}}
     {{#if received}}Dated {{dtos received}}<br>{{/if}}
+    {{#if scanned}}Added {{dtos scanned}}<br>{{/if}}
     {{#if category}}{{capitalize category.name}}<br>{{/if}}
     {{#if tags}}{{#each tags}}{{name}} {{/each}}<br>{{/if}}
     {{#if offline}}DOCUMENT UNAVAILABLE<br>{{/if}}
