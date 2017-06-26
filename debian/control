@@ -1,0 +1,17 @@
+Source: lagerdox
+Section: utils
+Priority: optional
+Maintainer: Henric Andersson <github@sensenet.nu>
+Build-Depends: debhelper (>=9)
+Standards-Version: 3.9.6
+Homepage: https://github.com/mrworf/lagerdox/
+Vcs-Git: git://github.com:mrworf/lagerdox.git
+Vcs-Browser: https://github.com/mrworf/lagerdox
+
+Package: lagerdox
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, tesseract-ocr, imagemagick, zbar-tools, pdftk, mariadb-server, qrencode
+Description: LagerDOX provides a searchable index of your documents
+ LagerDOX will allow you to easily index any PDF you may have and categorize and tag
+ the documents for easy retrieval. It will do OCR and try to figure out when the document
+ was received.
