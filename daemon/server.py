@@ -24,9 +24,9 @@ import shlex
 import time
 import Storage
 import document
-from configuration import Config
+import Utils
 
-config = Config()
+config = Utils.Config()
 
 """ Setup logging first """
 logging.getLogger('').handlers = []
