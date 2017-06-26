@@ -22,14 +22,6 @@ Hopefully all the steps are here, if not, let me know.
   PDF toolkit, is able to split/merge PDFs
 - `apt-get install mysql-server`
   Storage of all data
-- `apt-get install apache2`
-  Runs the website
-- `apt-get install php5`
-  Allows the logic to run, ties into apache2 if installed in this order
-- `apt-get install php5-mysql`
-  Enables use of MySQL from PHP5
-- `apt-get install inotify-tools`
-  Allows the monitor.sh script to detect folder changes
 
 ## Configuration
 Create a new database in MySQL, for example, "lagerdox" and make sure to add
