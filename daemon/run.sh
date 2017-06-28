@@ -13,4 +13,4 @@ if [ "$1" = "live" ]; then
 fi
 
 echo "===[ Using ${DATABASE} ]==="
-./server.py --database ${DATABASE} --dbuser ${USERNAME} --dbpass ${PASSWORD} ${CONFIG} $ARGS
+./lagerdoxd --database ${DATABASE} --dbuser ${USERNAME} --dbpass ${PASSWORD} ${CONFIG} $ARGS

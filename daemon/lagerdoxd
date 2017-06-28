@@ -23,8 +23,9 @@ import sys
 import shlex
 import time
 import Storage
-import document
+#import document
 import Utils
+import Document
 
 config = Utils.Config()
 
@@ -96,8 +97,8 @@ THUMB_FOLDER = config.get('paths', 'thumbnails')
 ALLOWED_EXTENSIONS = set(config.get('limits', 'extensions'))
 
 processList = {}
-feeder = document.Feeder(database, UPLOAD_FOLDER, COMPLETE_FOLDER, THUMB_FOLDER)
-processor = document.Processor(config.get('limits', 'jobs'))
+feeder = Document.Feeder(database, UPLOAD_FOLDER, COMPLETE_FOLDER, THUMB_FOLDER)
+processor = Document.Processor(config.get('limits', 'jobs'))
 
 #app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = config.get('limits', 'file size')
@@ -142,7 +143,7 @@ def generateThumbs(id):
   if not os.path.exists(path):
     os.makedirs(path)
   logging.info('Generating thumbnails for "%s"' % absfile)
-  processList[uid] = {'process' : document.Process(uid, absfile, path, handleResult, meta), 'mode' : 'thumb', 'extras' : None}
+  processList[uid] = {'process' : Document.Process(uid, absfile, path, handleResult, meta), 'mode' : 'thumb', 'extras' : None}
   processor.add(processList[uid]['process'].run)
 
 @app.route("/upload", methods=['POST'], defaults={'mode' : None})
@@ -172,7 +173,7 @@ def documentUpload(mode):
       ret['result'] = 'OK'
       ret['uid'] = uid
       logging.info('New file received and stored in "%s"' % absfile)
-      processList[uid] = {'process' : document.Process(uid, absfile, os.path.dirname(absfile), handleResult), 'mode' : mode, 'extras' : request.form.to_dict()}
+      processList[uid] = {'process' : Document.Process(uid, absfile, os.path.dirname(absfile), handleResult), 'mode' : mode, 'extras' : request.form.to_dict()}
       processor.add(processList[uid]['process'].run)
       print repr(processList[uid])
 
