@@ -5,6 +5,10 @@
 
 set -e
 
+setup() {
+  echo "Does nothing yet"
+}
+
 # summary of how this script can be called:
 #        * <postinst> `configure' <most-recently-configured-version>
 #        * <old-postinst> `abort-upgrade' <new version>
@@ -20,6 +24,7 @@ set -e
 
 case "$1" in
     configure)
+        setup
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

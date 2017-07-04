@@ -1,1 +1,5 @@
-daemon/* opt/lagerdox/
+daemon/* opt/lagerdox/daemon/
+tools/* opt/lagerdox/tools/
+html/* opt/lagerdox/html/
+LICENSE opt/lagerdox/
+README.md opt/lagerdox/

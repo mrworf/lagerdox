@@ -5,6 +5,26 @@
 
 set -e
 
+setup() {
+    # creating group if it isn't already there
+    if ! getent group lagerdox >/dev/null; then
+        addgroup --system lagerdox >/dev/null
+    fi
+
+    # creating user if it isn't already there
+    if ! getent passwd lagerdox >/dev/null; then
+        adduser \
+          --system \
+          --disabled-login \
+          --ingroup lagerdox \
+          --no-create-home \
+          --home /nonexistent \
+          --gecos "LagerDOX" \
+          --shell /bin/false \
+          lagerdox  >/dev/null
+    fi
+}
+
 # summary of how this script can be called:
 #        * <new-preinst> `install'
 #        * <new-preinst> `install' <old-version>
@@ -16,6 +36,7 @@ set -e
 
 case "$1" in
     install|upgrade)
+        setup
     ;;
 
     abort-upgrade)
