@@ -132,6 +132,14 @@ div.status div {
   white-space: nowrap;
 }
 
+div.status div.failed {
+  background-color: #ff8080;
+  padding: 5pt;
+  width: 100%;
+  margin-bottom: 5pt;
+  white-space: nowrap;
+}
+
 div span.filename {
   width: 50%;
   display: inline-block;

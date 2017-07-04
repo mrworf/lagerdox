@@ -43,6 +43,13 @@ class Config:
     config.set('general', 'port', 7000)
     config.set('general', 'logfile', None)
 
+    config.add_section('helpers')
+    config.set('helpers', 'convert', 'convert')
+    config.set('helpers', 'identify', 'identify')
+    config.set('helpers', 'tesseract', 'tesseract')
+    config.set('helpers', 'zbarimg', 'zbarimg')
+    config.set('helpers', 'pdftk', 'pdftk')
+
     if not os.path.exists(self.cmdline['config']):
       logging.error('Cannot open configuration file "%s"' % self.cmdline['config'])
       sys.exit(255)

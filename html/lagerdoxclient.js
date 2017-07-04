@@ -118,6 +118,10 @@ LagerDoxClient = function(serverAddress) {
 
   this.getStatus = function(resultFunction, errorFunction) {
     this.execServer('/status', function(result) {
+      if ('failed' in result) {
+        for (var i = 0; i != result['failed'].length; ++i)
+          result['failed'][i]['time'] = new Date(result['failed'][i]['time']*1000);
+      }
       resultFunction(result);
     }, errorFunction);
   }

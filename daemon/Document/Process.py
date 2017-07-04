@@ -21,6 +21,7 @@ import time
 from Queue import Queue
 import shutil
 import json
+import Utils
 
 FLAG_MANUAL = 1
 
@@ -47,6 +48,7 @@ class Process:
     self.workpath = workpath
     self.filepart = os.path.basename(filename)
     self.existing = existing
+    self.config = None
     self.state = {
       'overall' : 'PENDING',
       'filename' : self.filepart,
@@ -58,9 +60,22 @@ class Process:
     }
     self.uid = uid
 
+  def setConfig(self, config):
+    self.config = config
+
   def getState(self):
     return self.state
 
+  def substHelper(self, cmds):
+    if self.config is None:
+      return cmds
+
+    # Replace the first command with actual command
+    replace = self.config.get('helpers', cmds[0])
+    if replace != None:
+      cmds[0] = replace
+    print("New commands: " + repr(cmds))
+    return cmds
 
   def _execute(self, cmdline, extras=None, manual=False):
     params = {
@@ -89,7 +104,7 @@ class Process:
 
     # initiate the call and return to caller
     try:
-      p = Popen(cmds, stdout=PIPE, stderr=STDOUT)
+      p = Popen(self.substHelper(cmds), stdout=PIPE, stderr=STDOUT)
       out, ignore = p.communicate()
       return out, p.returncode
     except:
@@ -216,8 +231,8 @@ class Process:
     identcmd = self._execute(Process.CMD_META_BLANK2, {'page':page}, True)
 
     try:
-      ident = Popen(identcmd, stdin=PIPE, stdout=PIPE, stderr=STDOUT)
-      gray = Popen(graycmd, stdout=ident.stdin)
+      ident = Popen(self.substHelper(identcmd), stdin=PIPE, stdout=PIPE, stderr=STDOUT)
+      gray = Popen(self.substHelper(graycmd), stdout=ident.stdin)
       gray.wait()
       lines, result = ident.communicate()
       lines = lines.split('\n')

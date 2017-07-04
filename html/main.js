@@ -441,6 +441,10 @@ $( document ).ready(function() {
     return date.toLocaleDateString();
   });
 
+  Handlebars.registerHelper('strtime', function(date) {
+    return date.toLocaleString();
+  });
+
   // Loop X times
   Handlebars.registerHelper('loop', function(count, block) {
     var data = '';

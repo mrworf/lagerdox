@@ -11,4 +11,13 @@
   {{else}}
   idle!
   {{/each}}
+  {{#if failed}}
+  <div class="failed">Last 10 failed uploads</div>
+  {{/if}}
+  {{#each failed}}
+  <div>
+    <span class="filename">{{filename}}</span>
+    <span class="state">{{strtime time}}</span>
+  </div>
+  {{/each}}
 </div>

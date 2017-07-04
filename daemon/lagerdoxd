@@ -97,6 +97,7 @@ THUMB_FOLDER = config.get('paths', 'thumbnails')
 ALLOWED_EXTENSIONS = set(config.get('limits', 'extensions'))
 
 processList = {}
+failedList = []
 feeder = Document.Feeder(database, UPLOAD_FOLDER, COMPLETE_FOLDER, THUMB_FOLDER)
 processor = Document.Processor(config.get('limits', 'jobs'))
 
@@ -110,10 +111,19 @@ def hasDocument(filename):
 def allowed_file(filename):
   return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def addFailed(info):
+  if len(failedList) == 10:
+    failedList.remove(9)
+  info['time'] = int(time.time())
+  failedList.insert(0, info)
+
 def handleResult(uid, content):
   logging.debug('%s finished with: %s' % (uid, repr(content)))
-  for doc in content:
-    feeder.add(uid, doc, processList[uid]['mode'], processList[uid]['extras'])
+  if content is not None:
+    for doc in content:
+      feeder.add(uid, doc, processList[uid]['mode'], processList[uid]['extras'])
+  else:
+    addFailed(processList[uid]['process'].getState())
   del processList[uid]
 
 def deleteDocument(filename):
@@ -144,6 +154,7 @@ def generateThumbs(id):
     os.makedirs(path)
   logging.info('Generating thumbnails for "%s"' % absfile)
   processList[uid] = {'process' : Document.Process(uid, absfile, path, handleResult, meta), 'mode' : 'thumb', 'extras' : None}
+  processList[uid]['process'].setConfig(config)
   processor.add(processList[uid]['process'].run)
 
 @app.route("/")
@@ -178,8 +189,8 @@ def documentUpload(mode):
       ret['uid'] = uid
       logging.info('New file received and stored in "%s"' % absfile)
       processList[uid] = {'process' : Document.Process(uid, absfile, os.path.dirname(absfile), handleResult), 'mode' : mode, 'extras' : request.form.to_dict()}
+      processList[uid]['process'].setConfig(config)
       processor.add(processList[uid]['process'].run)
-      print repr(processList[uid])
 
   res = jsonify(ret)
   if 'error' in ret:
@@ -200,6 +211,7 @@ def getStatus():
     else:
       first.append(state)
   ret['jobs'] = first + last
+  ret['failed'] = failedList
   res = jsonify(ret)
   res.status_code = 200
   return res
