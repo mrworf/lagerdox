@@ -5,8 +5,30 @@
 
 set -e
 
+# Source debconf library.
+. /usr/share/debconf/confmodule
+
 setup() {
-  echo "Does nothing yet"
+  # First, fix permissions
+  chown -R lagerdox.lagerdox /opt/lagerdox
+
+  # Time to configure
+  if [ -f /etc/lagerdox/lagerdox.conf ]; then
+    # Seems to already exist, no point in editing it (yet)
+    return
+  fi
+  db_input medium lagerdox/dbserver || true
+  db_go
+  db_input medium lagerdox/dbdatabase || true
+  db_go
+  db_input medium lagerdox/dbuser || true
+  db_go
+  db_input medium lagerdox/dbpassword || true
+  db_go
+  db_input high lagerdox/dbrootuser || true
+  db_go
+  db_input high lagerdox/dbrootpassword || true
+  db_go
 }
 
 # summary of how this script can be called:

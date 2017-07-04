@@ -1,0 +1,62 @@
+Template: lagerdox/welcome
+Type: text
+Description: Welcome to lagerDOX
+ In order to use lagerDOX, we need to setup the database as well as configure the
+ paths where we'll be storing the uploads, documents and thumbnails.
+
+Template: lagerdox/dbserver
+Type: string
+Default: 127.0.0.1
+Description: Which MariaDB/MySQL server should lagerDOX use?
+ LagerDOX requires a MariaDB (or MySQL) database to store metadata and the transcribed text
+ from the scanned documents.
+
+Template: lagerdox/dbname
+Type: string
+Default: lagerdox
+Description: What should the database be called?
+ This defines the name of the new database that we will create.
+
+Template: lagerdox/dbuser
+Type: string
+Default: lagerdox
+Description: Username to use for accessing database?
+ The name of a user which should be used to access the database
+
+Template: lagerdox/dbpassword
+Type: password
+Default: lagerdox
+Description: Password to assign this user?
+ The user must have a password, please assign one here
+
+Template: lagerdox/dbrootuser
+Type: string
+Default:
+Description: Please provide an admin user for your database
+ In order to create the user who will be used by lagerDOX, we need the admin username
+
+Template: lagerdox/dbrootpassword
+Type: password
+Default:
+Description: Please provide an admin password for your database
+ In order to create the user who will be used by lagerDOX, we need the admin password
+
+Template: lagerdox/pathupload
+Type: string
+Default: /var/lagerdox/upload
+Description: Where should uploads be held?
+ When documents are added to lagerDOX for processing, they're held in this location.
+ This is not the permanent location for uploads. It's not recommended to use a tmpfs destination.
+
+Template: lagerdox/pathstore
+Type: string
+Default: /var/lagerdox/store
+Description: Where should documents be kept?
+ This is the final resting place for all uploaded documents.
+
+Template: lagerdox/paththumbs
+Type: string
+Default: /var/lagerdox/thumbs
+Description: Where should thumbnails be held?
+ Once documents are added, thumbnails are generated for all pages. This location will hold
+ the generated thumbnails. It's not recommended to use a tmpfs destination.
