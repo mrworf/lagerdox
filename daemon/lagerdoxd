@@ -23,7 +23,6 @@ import sys
 import shlex
 import time
 import Storage
-#import document
 import Utils
 import Document
 
@@ -36,10 +35,11 @@ logging.basicConfig(filename=config.get('general', 'logfile'), level=logging.DEB
 """ Continue with the rest """
 from tornado.wsgi import WSGIContainer
 from tornado.ioloop import IOLoop
-from tornado.web import Application, FallbackHandler
+from tornado.web import Application, FallbackHandler, StaticFileHandler
 from tornado.websocket import WebSocketHandler
 
-from flask import Flask, jsonify, Response, request, redirect, url_for, send_file, abort
+
+from flask import Flask, jsonify, Response, request, redirect, url_for, send_file, abort, redirect
 from werkzeug.utils import secure_filename
 import threading
 import Queue
@@ -145,6 +145,10 @@ def generateThumbs(id):
   logging.info('Generating thumbnails for "%s"' % absfile)
   processList[uid] = {'process' : Document.Process(uid, absfile, path, handleResult, meta), 'mode' : 'thumb', 'extras' : None}
   processor.add(processList[uid]['process'].run)
+
+@app.route("/")
+def documentHome():
+  return redirect('/html/index.html', code=301)
 
 @app.route("/upload", methods=['POST'], defaults={'mode' : None})
 @app.route("/upload/<mode>", methods=['POST'])
@@ -572,7 +576,7 @@ if __name__ == "__main__":
   logging.info("lagerDox running on port %d" % config.get('general', 'port'))
   container = WSGIContainer(app)
   server = Application([
-    #(r'/events/(.*)', WebSocket),
+    (r'/html/(.*)', StaticFileHandler, {'path' : config.get('paths', 'html')} ),
     (r'.*', FallbackHandler, dict(fallback=container))
     ])
   server.listen(config.get('general', 'port'))

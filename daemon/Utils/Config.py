@@ -25,6 +25,7 @@ class Config:
     config.set("paths", "upload", None)
     config.set("paths", "complete", None)
     config.set("paths", "thumbnails", None)
+    config.set('paths', 'html', None)
 
     config.add_section('database')
     config.set('database', 'host', 'localhost')
@@ -58,6 +59,9 @@ class Config:
         value = self.config.get(section, key).split('^\s+|\s*,\s*|\s+$')
       else:
         value = self.config.get(section, key)
+        if section == 'paths':
+          # Make it absolute!
+          value = os.path.abspath(value)
       # A way of making sure integers are returned as integers
       try:
         return int(value)
