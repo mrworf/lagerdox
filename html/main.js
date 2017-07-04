@@ -3,6 +3,12 @@ $( document ).ready(function() {
   var client = new LagerDoxClient('http://' + serverName + ':7000/');
   var maxperpage = 15;
 
+  // Override default error handler...
+  client.genericError = function(info) {
+    var comp = Handlebars.getTemplate('error');
+    $('#busyimg').replaceWith(comp({'message' : info}));
+  }
+
   // See http://berzniz.com/post/24743062344/handling-handlebarsjs-like-a-pro
   Handlebars.getTemplate = function(name) {
     if (Handlebars.templates === undefined || Handlebars.templates[name] === undefined) {
