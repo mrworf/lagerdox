@@ -576,7 +576,7 @@ if __name__ == "__main__":
   logging.info("lagerDox running on port %d" % config.get('general', 'port'))
   container = WSGIContainer(app)
   server = Application([
-    (r'/html/(.*)', StaticFileHandler, {'path' : config.get('paths', 'html')} ),
+    (r'/html/(.*)', StaticFileHandler, {'path' : config.get('paths', 'html')}),
     (r'.*', FallbackHandler, dict(fallback=container))
     ])
   server.listen(config.get('general', 'port'))
