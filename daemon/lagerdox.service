@@ -1,0 +1,15 @@
+[Unit]
+Description = lagerDOX, a searchable document database
+Requires = mysql.service
+Wants = network.target
+After = mysql.service network.target
+
+[Service]
+User = lagerdox
+Group = lagerdox
+ExecStart = /opt/lagerdox/daemon/lagerdoxd /etc/lagerdox/lagerdox.conf
+Type = simple
+Restart = always
+
+[Install]
+WantedBy = multi-user.target
