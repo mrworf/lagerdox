@@ -38,24 +38,13 @@ from tornado.ioloop import IOLoop
 from tornado.web import Application, FallbackHandler, StaticFileHandler
 from tornado.websocket import WebSocketHandler
 
-
 from flask import Flask, jsonify, Response, request, redirect, url_for, send_file, abort, redirect
 from werkzeug.utils import secure_filename
 import threading
 import Queue
 import time
 
-try:
-  from flask.ext.cors import CORS # The typical way to import flask-cors
-except ImportError:
-  # Path hack allows examples to be run without installation.
-  import os
-  parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-  os.sys.path.insert(0, parentdir)
-  from flask.ext.cors import CORS
-
 """ Disable some logging by-default """
-logging.getLogger("Flask-Cors").setLevel(logging.ERROR)
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 """ Initiate database connection """
@@ -84,7 +73,6 @@ database.prepare()
 
 """ Initialize the REST server """
 app = Flask(__name__)
-cors = CORS(app) # Needed to make us CORS compatible
 
 """ ================= """
 

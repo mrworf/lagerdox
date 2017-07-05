@@ -34,10 +34,16 @@ class MariaDB:
     except mysql.connector.Error as err:
       if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
         logging.error("Something is wrong with your user name or password")
+        #logging.debug('User: ' + repr(self.user))
+        #logging.debug('Pass: ' + repr(self.password))
+        #logging.debug('Host: ' + repr(self.host))
+        #logging.debug('DB  : ' + repr(self.database))
       elif err.errno == errorcode.ER_BAD_DB_ERROR:
         logging.error("Database does not exist")
       else:
         logging.exception('Failed to connect')
+    except:
+      logging.exception('Failed to connect')
     return False
 
   def getCursor(self, dictionary=False, buffered=False):

@@ -1,5 +1,6 @@
 $( document ).ready(function() {
-  var serverName = "magi.sfo.sensenet.nu";
+  // This is less than optimal, but for now, it will do
+  var serverName = window.location.hostname;
   var client = new LagerDoxClient('http://' + serverName + ':7000/');
   var maxperpage = 15;
 

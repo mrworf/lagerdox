@@ -58,7 +58,7 @@ class Config:
     self.config = config
 
   def get(self, section, key):
-    if key in self.cmdline:
+    if key in self.cmdline and self.cmdline[key] is not None:
       return self.cmdline[key]
     else:
       # Handle special cases first!

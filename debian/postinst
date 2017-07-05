@@ -13,22 +13,96 @@ setup() {
   chown -R lagerdox.lagerdox /opt/lagerdox
 
   # Time to configure
-  if [ -f /etc/lagerdox/lagerdox.conf ]; then
-    # Seems to already exist, no point in editing it (yet)
-    return
+  if [ ! -d /etc/lagerdox ]; then
+    mkdir -p /etc/lagerdox
   fi
-  db_input medium lagerdox/dbserver || true
-  db_go
-  db_input medium lagerdox/dbdatabase || true
-  db_go
-  db_input medium lagerdox/dbuser || true
-  db_go
-  db_input medium lagerdox/dbpassword || true
-  db_go
-  db_input high lagerdox/dbrootuser || true
-  db_go
-  db_input high lagerdox/dbrootpassword || true
-  db_go
+  if [ ! -f /etc/lagerdox/lagerdox.conf ]; then
+    db_beginblock
+      db_input medium lagerdox/dbserver || true
+      db_input medium lagerdox/dbdatabase || true
+      db_input medium lagerdox/dbuser || true
+      db_input medium lagerdox/dbpassword || true
+    db_endblock
+    db_go
+
+    db_beginblock
+      db_input high lagerdox/dbrootuser || true
+      db_input high lagerdox/dbrootpassword || true
+    db_endblock
+    db_go
+
+    cat >/etc/lagerdox/lagerdox.conf <<EOF
+# LagerDOX 2.0 Coffee Edition
+#
+# Configuration generated: $(date)
+#
+[paths]
+upload = $(db_get lagerdox/pathupload ; echo $RET)
+complete = $(db_get lagerdox/pathstore ; echo $RET)
+thumbnails = $(db_get lagerdox/paththumbs ; echo $RET)
+html = /opt/lagerdox/html/
+
+[limits]
+jobs = $(( $(cat /proc/cpuinfo  | grep processor | sort | tail -n1 | egrep -o '[0-9]+') + 1 ))
+extensions = pdf
+file size = $((512 * 1024 * 1024))
+
+[database]
+username = $(db_get lagerdox/dbuser ; echo $RET)
+password = $(db_get lagerdox/dbpassword ; echo $RET)
+host = $(db_get lagerdox/dbserver ; echo $RET)
+database = $(db_get lagerdox/dbname ; echo $RET)
+
+[general]
+listen = 0.0.0.0
+port = 7000
+logfile = /var/log/lagerdox/main.log
+
+[helpers]
+# Allows you to point out specific versions of tools if not in the path
+# or if you've installed them somewhere else.
+#convert =
+#identify =
+#pdftk =
+#tesseract =
+#zbarimg =
+EOF
+    # Make it a bit more secure since there's a password in it
+    chown lagerdox.root /etc/lagerdox/lagerdox.conf
+    chmod 640 /etc/lagerdox/lagerdox.conf
+  fi
+
+  local DBROOTUSER="$(db_get lagerdox/dbrootuser ; echo $RET)"
+  local DBROOTPW="$(db_get lagerdox/dbrootpassword ; echo $RET)"
+  local DBNAME="$(db_get lagerdox/dbname ; echo $RET)"
+  local DBUSER="$(db_get lagerdox/dbuser ; echo $RET)"
+  local DBPW="$(db_get lagerdox/dbpassword ; echo $RET)"
+
+    # Make sure we have the database user setup
+  echo "CREATE DATABASE IF NOT EXISTS $DBNAME CHARACTER SET utf8 COLLATE utf8_bin;" | mysql -u $DBROOTUSER -p$DBROOTPW
+  HASUSER=$(echo "SELECT EXISTS(SELECT 1 FROM mysql.user WHERE user = '$DBUSER')" | mysql -u $DBROOTUSER -p$DBROOTPW | tail -n1)
+  if [ $HASUSER -eq 0 ]; then
+    echo "CREATE USER '$DBUSER'@'%' IDENTIFIED BY '$DBPW';" | mysql -u $DBROOTUSER -p$DBROOTPW
+  fi
+  echo "GRANT ALL PRIVILEGES ON $DBNAME.* TO '$DBUSER'@'%';" | mysql -u $DBROOTUSER -p$DBROOTPW
+  echo "FLUSH PRIVILEGES;" | mysql -u $DBROOTUSER -p$DBROOTPW
+
+  if ! /opt/lagerdox/daemon/lagerdoxd --setup /etc/lagerdox/lagerdox.conf ; then
+    echo "Warning: Unable to setup database, already setup?"
+  fi
+
+  # Install the service
+  rm >/dev/null 2>/dev/null /etc/systemd/system/lagerdox.service || true
+  ln -s /opt/lagerdox/daemon/lagerdox.service /etc/systemd/system/lagerdox.service
+
+  # Create a folder in /var/log so we can log things
+  mkdir -p /var/log/lagerdox
+  chown lagerdox.adm /var/log/lagerdox
+  chmod 755 /var/log/lagerdox
+  chmod +s /var/log/lagerdox
+
+  # Start it
+  systemctl start lagerdox.service
 }
 
 # summary of how this script can be called:

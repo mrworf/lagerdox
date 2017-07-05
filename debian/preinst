@@ -6,6 +6,9 @@
 set -e
 
 setup() {
+    # Stop old service
+    systemctl stop lagerdox.service || true
+
     # creating group if it isn't already there
     if ! getent group lagerdox >/dev/null; then
         addgroup --system lagerdox >/dev/null
