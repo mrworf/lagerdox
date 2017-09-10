@@ -556,6 +556,10 @@ class MariaDB:
     for include in keys['modifier']['include']:
       if 'catid' in include:
         qwhere += 'AND documents.category = %d ' % int(include['catid'])
+      elif 'added' in include:
+        qwhere += 'AND DATE(FROM_UNIXTIME(documents.scanned)) = "%s" ' % include['added']
+      elif 'dated' in include:
+        qwhere += 'AND DATE(FROM_UNIXTIME(documents.received)) = "%s" ' % include['dated']
       elif 'blank' in include:
         if include['blank'] == 'yes':
           qwhere += 'AND pages.blankness < 200'
