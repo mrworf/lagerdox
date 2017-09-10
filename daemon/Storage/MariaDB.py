@@ -617,7 +617,7 @@ class MariaDB:
     if sortby:
       query += ' ORDER BY %s' % sortby
     else:
-      query += ' ORDER BY received DESC, scanned DESC'
+      query += ' ORDER BY COALESCE(NULLIF(received,0), scanned) DESC, COALESCE(scanned, NULLIF(received,0)) DESC'
 
     #logging.debug('Query statement: ' + query)
 
