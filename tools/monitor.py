@@ -75,6 +75,7 @@ def onFile(filename, name):
     logging.exception('Failed to communicate with server "%s"', cmdline.server)
     return False
 
+  ret = False
   j = None
   try:
     j = r.json()
@@ -82,6 +83,7 @@ def onFile(filename, name):
     logging.exception('"%s" failed: Corrupt server response', name)
   if j is not None:
     if 'result' in j and j['result'] == 'OK':
+      ret = True # Success
       logging.info('"%s" uploaded, uid = %s', name, j['uid'])
       if cmdline.keep:
         logging.debug('Keeping "%s" in folder', filename)
@@ -93,6 +95,7 @@ def onFile(filename, name):
     elif 'error' in j:
       logging.error('"%s" failed: %s', name, j['error'])
       if j['error'] == 'File not allowed' and cmdline.delete_invalid:
+        ret = True # Considered success
         logging.debug('Deleting invalid file "%s"', filename)
         try:
           os.unlink(filename)
@@ -102,7 +105,7 @@ def onFile(filename, name):
       logging.error('"%s" failed', name)
   else:
     logging.error('"%s" failed', name)
-  return True
+  return ret
 
 parser = argparse.ArgumentParser(description="Monitor - Looks for files to push into lagerDOX", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--logfile', help="Log to file instead of stdout")
