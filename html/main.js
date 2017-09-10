@@ -442,6 +442,14 @@ $( document ).ready(function() {
     return date.toLocaleDateString();
   });
 
+  Handlebars.registerHelper('donly', function(date) {
+    var year = date.getFullYear();
+    var month = date.getMonth()+1;
+    var day = date.getDate();
+
+    return year.toString() + "-" + (month < 10 ? "0" + month.toString() : month.toString()) + "-" + (day < 10 ? "0" + day.toString() : day.toString());
+  });
+
   Handlebars.registerHelper('strtime', function(date) {
     return date.toLocaleString();
   });

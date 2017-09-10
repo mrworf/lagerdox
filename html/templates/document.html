@@ -1,23 +1,29 @@
 <div class="document">
   <div class="document_info">
-    {{#if scanned}}Added {{dtos scanned}}<br>{{/if}}
-    {{#if received}}Dated {{dtos received}}<br>{{/if}}
-    {{#if category}}{{capitalize category.name}}<br>{{/if}}
+    {{#if received}}Dated <a href="?section=search&q=dated:{{donly received}}">{{dtos received}}</a><br>{{/if}}
+    {{#if scanned}}Added <a href="?section=search&q=added:{{donly scanned}}">{{dtos scanned}}</a><br>{{/if}}
+    {{#if category}}<a href="?section=search&q=catid:{{category.id}}">{{capitalize category.name}}</a>
+    <button id="item_category" data-id="{{id}}">Change category</button>
+    {{else}}
+    <button id="item_category" data-id="{{id}}">Set category</button>
+    {{/if}}<br>
     {{#each tags}}
       <button id="tag_delete" data-id="{{../id}}" data-tag="{{id}}">{{name}}</button>
     {{/each}}
-    {{#if offline}}DOCUMENT UNAVAILABLE<br>{{/if}}
-    <button id="item_tag" data-id="{{id}}">Add...</button>
+    <button id="item_tag" data-id="{{id}}">Add tag...</button>
     <br>
     <hr>
     Pages {{pages}}<br>
     <hr>
-    <button id="item_category" data-id="{{id}}">Category</button>
+    {{#if offline}}{{else}}
     <button id="item_view" data-id="{{id}}">View</button>
     <button id="item_download" data-id="{{id}}">Download</button>
+    {{/if}}
     <button id="item_delete" data-id="{{id}}">Delete</button>
   </div>
   {{#if offline}}
+    DOCUMENT UNAVAILABLE<br>
+
   {{else}}
     {{#each page}}
       <div class="page">
