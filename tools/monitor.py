@@ -15,6 +15,7 @@ import time
 
 import logging
 import requests
+import argparse
 
 class FileMonitor:
   def __init__(self):
@@ -56,21 +57,24 @@ class FileMonitor:
         size = os.path.getsize(folder + '/' + f)
 
         if f in lstFiles and lstFiles[f] == size and f not in lstProcessed:
-          # File has not changed since last, emit it
-          callback(folder + '/' + f, f)
-          lstProcessed.append(f)
+          # Send this file to the callback
+          if callback(folder + '/' + f, f):
+            lstProcessed.append(f)
         else:
           # Just track the change
           lstFiles[f] = size
 
-logging.getLogger('').handlers = []
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(filename)s@%(lineno)d - %(levelname)s - %(message)s')
-logging.getLogger("requests").setLevel(logging.ERROR)
+cmdline = None
 
 def onFile(filename, name):
-  url = sys.argv[2] + "/upload"
+  url = cmdline.server + "/upload"
   files = {'file' : open(filename, 'rb')}
-  r = requests.post(url, files=files)
+  try:
+    r = requests.post(url, files=files)
+  except:
+    logging.exception('Failed to communicate with server "%s"', cmdline.server)
+    return False
+
   j = None
   try:
     j = r.json()
@@ -79,16 +83,43 @@ def onFile(filename, name):
   if j is not None:
     if 'result' in j and j['result'] == 'OK':
       logging.info('"%s" uploaded, uid = %s', name, j['uid'])
+      if cmdline.keep:
+        logging.debug('Keeping "%s" in folder', filename)
+      else:
+        try:
+          os.unlink(filename)
+        except:
+          logging.exception('Failed to delete "%s"', filename)
     elif 'error' in j:
       logging.error('"%s" failed: %s', name, j['error'])
+      if j['error'] == 'File not allowed' and cmdline.delete_invalid:
+        logging.debug('Deleting invalid file "%s"', filename)
+        try:
+          os.unlink(filename)
+        except:
+          logging.exception('Failed to delete "%s"', filename)
     else:
       logging.error('"%s" failed', name)
   else:
     logging.error('"%s" failed', name)
+  return True
 
-if len(sys.argv) != 3:
-  sys.stdout.write("monitor.py <folder> <server url>\n")
-  sys.exit(255)
+parser = argparse.ArgumentParser(description="Monitor - Looks for files to push into lagerDOX", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--logfile', help="Log to file instead of stdout")
+parser.add_argument('--server', default="http://localhost:7000", help="Which server to send documents to")
+parser.add_argument('--folder', help="Which folder to monitor for files")
+parser.add_argument('--keep', action='store_true', default=False, help="Don't delete the uploaded file from folder")
+parser.add_argument('--delete-invalid', action='store_true', default=False, help="Delete files which the server says it doesn't support")
+parser.add_argument('--debug', action='store_true', default=False, help="Enable additional log messages")
+cmdline = parser.parse_args()
+
+loglevel = logging.INFO
+if cmdline.debug:
+  loglevel = logging.DEBUG
+
+logging.getLogger('').handlers = []
+logging.basicConfig(filename=cmdline.logfile, level=loglevel, format='%(asctime)s - %(filename)s@%(lineno)d - %(levelname)s - %(message)s')
+logging.getLogger("requests").setLevel(logging.ERROR)
 
 mon = FileMonitor()
-mon.monitor(sys.argv[1], onFile)
+mon.monitor(cmdline.folder, onFile)
