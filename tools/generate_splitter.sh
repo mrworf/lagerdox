@@ -32,4 +32,4 @@ ${CONVERT} -size 1237x1762 xc:white \
         pdf:single.pdf
 
 # Generate double sided version
-${CONVERT} single.pdf single.pdf -compress ZIP double.pdf
+${CONVERT} single.pdf single.pdf -compress ZIP splitter-page.pdf && rm single.pdf
