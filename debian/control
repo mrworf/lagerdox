@@ -10,7 +10,7 @@ Vcs-Browser: https://github.com/mrworf/lagerdox
 
 Package: lagerdox
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, tesseract-ocr, imagemagick, zbar-tools, pdftk, mariadb-server | mysql-server, qrencode, python, debconf, python-tornado, python-flask, python-mysql.connector
+Depends: ${shlibs:Depends}, ${misc:Depends}, tesseract-ocr, imagemagick, zbar-tools, pdftk, mariadb-server | mysql-server, qrencode, python, debconf, python-tornado, python-flask, python-requests, python-mysql.connector, ntp
 Description: LagerDOX provides a searchable index of your documents
  LagerDOX will allow you to easily index any PDF you may have and categorize and tag
  the documents for easy retrieval. It will do OCR and try to figure out when the document

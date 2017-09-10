@@ -31,15 +31,17 @@ Description: Password to assign this user?
 
 Template: lagerdox/dbrootuser
 Type: string
-Default:
+Default: root
 Description: Please provide an admin user for your database
  In order to create the user who will be used by lagerDOX, we need the admin username
+ (default is "root" unless you've changed it)
 
 Template: lagerdox/dbrootpassword
 Type: password
 Default:
 Description: Please provide an admin password for your database
  In order to create the user who will be used by lagerDOX, we need the admin password
+ (default is "root" unless you've changed it, which would be wise)
 
 Template: lagerdox/pathupload
 Type: string
@@ -47,12 +49,15 @@ Default: /var/lagerdox/upload
 Description: Where should uploads be held?
  When documents are added to lagerDOX for processing, they're held in this location.
  This is not the permanent location for uploads. It's not recommended to use a tmpfs destination.
+ (The selected location will be created if it doesn't exist)
 
 Template: lagerdox/pathstore
 Type: string
 Default: /var/lagerdox/store
 Description: Where should documents be kept?
  This is the final resting place for all uploaded documents.
+ It's highly recommended to back up these files if you intend to shred the originals.
+ (The selected location will be created if it doesn't exist)
 
 Template: lagerdox/paththumbs
 Type: string
@@ -60,3 +65,4 @@ Default: /var/lagerdox/thumbs
 Description: Where should thumbnails be held?
  Once documents are added, thumbnails are generated for all pages. This location will hold
  the generated thumbnails. It's not recommended to use a tmpfs destination.
+ (The selected location will be created if it doesn't exist)

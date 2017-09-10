@@ -16,12 +16,15 @@ setup() {
   if [ ! -d /etc/lagerdox ]; then
     mkdir -p /etc/lagerdox
   fi
+
   if [ ! -f /etc/lagerdox/lagerdox.conf ]; then
+    echo "Info: No configuration found, assuming first time installation"
+    # TODO: Add checking and error handling
     db_beginblock
-      db_input medium lagerdox/dbserver || true
-      db_input medium lagerdox/dbdatabase || true
-      db_input medium lagerdox/dbuser || true
-      db_input medium lagerdox/dbpassword || true
+      db_input high lagerdox/dbserver || true
+      db_input high lagerdox/dbdatabase || true
+      db_input high lagerdox/dbuser || true
+      db_input high lagerdox/dbpassword || true
     db_endblock
     db_go
 
