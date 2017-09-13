@@ -161,3 +161,27 @@ div span.pages {
 div.status div[data-state="PENDING"] {
   background-color: #f0f0f0;
 }
+
+div.help {
+  background-color: white;
+  padding: 5pt;
+  border: 1px solid black;
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  margin:auto;
+  width: 85%;
+  height: 85%;
+}
+
+.hidden {
+    display: none;
+}
+
+div.help span {
+  font-weight: bold;
+  display: block;
+}
+

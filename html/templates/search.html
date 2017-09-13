@@ -1,5 +1,31 @@
+<div class="help hidden">
+  <span>Special prefixes</span>
+  <ul>
+    <li><strong>+</strong> The word is mandatory in all results.</li>
+    <li><strong>-</strong> The word cannot appear in any results.</li>
+    <li><strong>&lt;</strong> The word that follows has a lower relevance than other words, although documents containing it will still match</li>
+    <li><strong>&gt;</strong> The word that follows has a higher relevance than other words.</li>
+    <li><strong>()</strong> Used to group words into subexpressions.</li>
+    <li><strong>~</strong> The word following contributes negatively to the relevance of the document (which is different to the '-' operator, which specifically excludes the word, or the '<' operator, which still causes the word to contribute positively to the relevance of the document.</li>
+    <li><strong>*</strong> The wildcard, indicating zero or more characters. It can only appear at the end of a word.</li>
+    <li><strong>"</strong> Anything enclosed in the double quotes is taken as a whole (so you can match phrases, for example).</li>
+  </ul>
+  <span>Special keywords</span>
+  These are defined as keyword:value, for example "dated:2017-01-01", please note that you cannot use keywords with prefixes (above section). All defined keywords narrow down the result, which means that defining both a added date and a dated date will only return documents which match BOTH of these criterias.
+  <ul>
+    <li><strong>dated</strong> Documents which were dated to a specific date</li>
+    <li><strong>added</strong> Documents which were added at a specific date</li>
+    <li><strong>catid</strong> Documents with a specific category id (not the name)</li>
+    <li><strong>blank</strong> Wether to include blank pages (yes or no as value)</li>
+    <li><strong>contains</strong> Must contain exactly this value. While most of the time you don't need this, it does allow you to find really short words (which normal search doesn't normally include). But it's an expensive operation which is why it's not the default behavior.</li>
+  </ul>
+  <span>Date ranges</span>
+  When defining a date for dated/added, you must use ISO standard (YYYY-MM-DD). You can also leave out either DD or both MM-DD to search for all documents in a month (YYYY-MM) or a year (YYYY). It's also possible to search a defined range by writing two dates separated with an equal sign, 2016=2017 will search both years, 2010-2=2010-8 will search february through august of 2010.
+  <bR>
+  <button type="button" onClick="$('div.help').toggleClass('hidden')">Close</button>
+</div>
 <div class="search">
-  <button type="button" id="help">Help</button>
+  <button type="button" onClick="$('div.help').toggleClass('hidden')">Help</button>
 	<button type="button" id="search">Search</button>
   <input type="text" id="query">
 </div>
