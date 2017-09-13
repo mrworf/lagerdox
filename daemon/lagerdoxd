@@ -396,6 +396,20 @@ def documentThumbnail(id, thumb):
   res.status_code = 500
   return res
 
+@app.route("/document/hash/<id>", methods=['GET'])
+def search_hash(id):
+  if id != "":
+    result = database.query_hash(id)
+  else:
+    result = None
+
+  if result is None:
+    abort(404)
+  else:
+    res = jsonify({'result':result['id']})
+    res.status_code = 200
+    return res
+
 @app.route('/document/<id>/test', methods=['POST'])
 @app.route('/document/test', methods=['POST'], defaults={'id':None})
 def documentFilterTest(id):

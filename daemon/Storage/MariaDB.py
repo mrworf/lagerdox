@@ -99,7 +99,7 @@ class MariaDB:
       return False
 
     sql = [
-      'CREATE TABLE documents (id INT PRIMARY KEY AUTO_INCREMENT, category INT, scanned INT NOT NULL, received INT, pages INT NOT NULL, filename TEXT NOT NULL)',
+      'CREATE TABLE documents (id INT PRIMARY KEY AUTO_INCREMENT, category INT, scanned INT NOT NULL, received INT, pages INT NOT NULL, filename TEXT NOT NULL, hash VARCHAR(255) NOT NULL)',
       'CREATE TABLE pages (id INT NOT NULL, page INT NOT NULL, ocr BOOLEAN NOT NULL, blankness INT NOT NULL, degrees INT NOT NULL, confidence REAL NOT NULL, colors INT NOT NULL, UNIQUE KEY page (page, id))',
       'CREATE TABLE contents (id INT NOT NULL, page INT NOT NULL, content LONGTEXT NOT NULL, FULLTEXT INDEX (content), UNIQUE KEY page (page, id))',
       'CREATE TABLE categories (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(128) NOT NULL, filter TEXT NOT NULL DEFAULT "")',
@@ -124,11 +124,11 @@ class MariaDB:
   def prepare(self):
     return True
 
-  def add_document(self, category, scanned, received, pages, filename):
-    query = 'INSERT INTO documents (category, scanned, received, pages, filename) VALUES (%s, %s, %s, %s, %s)'
+  def add_document(self, category, scanned, received, pages, filename, hashstr):
+    query = 'INSERT INTO documents (category, scanned, received, pages, filename, hash) VALUES (%s, %s, %s, %s, %s, %s)'
     cursor = self.getCursor(buffered=True)
     try:
-      cursor.execute(query, (category, scanned, received, pages, filename))
+      cursor.execute(query, (category, scanned, received, pages, filename, hashstr))
       self.cnx.commit()
       return cursor.lastrowid
     except mysql.connector.Error as err:
@@ -405,6 +405,14 @@ class MariaDB:
       data = data.next()
     return data
 
+  def query_hash(self, hashstr):
+    data = self._query_with_iterator('SELECT * FROM documents WHERE hash = "%s"' % hashstr)
+    if data is not None and data.size() > 0:
+      data = data.next()
+    else:
+      data = None
+    return data
+
   def query_document(self, id):
     data = None
     result = self._query_with_iterator("""
@@ -515,6 +523,49 @@ class MariaDB:
     cursor.close()
     return Iterator(None, 'Error performing query')
 
+  def generateDateQuery(self, field, value):
+    """ Will handle cases where only year or month is provided, as well as more complex versions
+        where it's a range. The format looks like this:
+          YYYY (the entire year)
+          YYYY-MM (that month)
+          YYYY-MM-DD (that day)
+        To make a range, simply add a colon and enter next date.
+        Note that the format must be identical when using range, so:
+          YYYY:YYYY
+          YYYY-MM:YYYY-MM
+          YYYY-MM-DD:YYYY-MM-DD
+        not
+          YYYY:YYYY-MM
+        or the likes, that will be rejected
+        The order of date is not important in the range, either way works
+    """
+    start = value.split('-')
+    end = None
+    if "=" in value:
+      (start, end) = value.split('=',1)
+      start = start.split('-')
+      end = end.split('-')
+
+    result = ''
+    if end is not None and len(start) != len(end):
+      logging.error('Cannot generate date query using %s', value)
+    elif len(start) == 3: # Day
+      if end is None:
+        result = 'AND UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) = UNIX_TIMESTAMP("%s")' % (field, '-'.join(start))
+      else:
+        result = 'AND (UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) >= UNIX_TIMESTAMP("%s") AND UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) <= UNIX_TIMESTAMP("%s"))' % (field, '-'.join(start), field, '-'.join(end))
+    elif len(start) == 2: # Month
+      if end is None:
+        result = 'AND (UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) >= UNIX_TIMESTAMP("%s-01") AND UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) <= UNIX_TIMESTAMP(LAST_DAY("%s-01")))' % (field, '-'.join(start), field, '-'.join(start))
+      else:
+        result = 'AND (UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) >= UNIX_TIMESTAMP("%s-01") AND UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) <= UNIX_TIMESTAMP(LAST_DAY("%s-01")))' % (field, '-'.join(start), field, '-'.join(end))
+    elif len(start) == 1: # Year
+      if end is None:
+        result = 'AND (UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) >= UNIX_TIMESTAMP("%s-01-01") AND UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) <= UNIX_TIMESTAMP(LAST_DAY("%s-12-01")))' % (field, '-'.join(start), field, '-'.join(start))
+      else:
+        result = 'AND (UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) >= UNIX_TIMESTAMP("%s-01-01") AND UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) <= UNIX_TIMESTAMP(LAST_DAY("%s-12-01")))' % (field, '-'.join(start), field, '-'.join(end))
+    return result
+
   def query_all(self, keys):
     qfield = """
       documents.*,
@@ -557,9 +608,11 @@ class MariaDB:
       if 'catid' in include:
         qwhere += 'AND documents.category = %d ' % int(include['catid'])
       elif 'added' in include:
-        qwhere += 'AND DATE(FROM_UNIXTIME(documents.scanned)) = "%s" ' % include['added']
+        qwhere += self.generateDateQuery('documents.scanned', include['added']) #'AND DATE(FROM_UNIXTIME(documents.scanned)) = "%s" ' % include['added']
       elif 'dated' in include:
-        qwhere += 'AND DATE(FROM_UNIXTIME(documents.received)) = "%s" ' % include['dated']
+        qwhere += self.generateDateQuery('documents.received', include['dated']) #'AND DATE(FROM_UNIXTIME(documents.received)) = "%s" ' % include['dated']
+      elif 'contains' in include:
+        qwhere += 'AND contents.content LIKE "%%%s%%" ' % include['contains']
       elif 'blank' in include:
         if include['blank'] == 'yes':
           qwhere += 'AND pages.blankness < 200'
@@ -652,6 +705,15 @@ class Iterator:
 
   def __next__(self):
     return self.next()
+
+  def size(self):
+    if self.error is not None:
+      raise StopIteration
+    elif self.cursor is None:
+      logging.warning('Cursor was none')
+      raise StopIteration
+    else:
+      return self.cursor.rowcount
 
   def next(self):
     """

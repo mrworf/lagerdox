@@ -16,6 +16,7 @@ import time
 import logging
 import requests
 import argparse
+import hashlib
 
 class FileMonitor:
   def __init__(self):
@@ -66,7 +67,27 @@ class FileMonitor:
 
 cmdline = None
 
+def generateHash(filename):
+  sha = hashlib.new('sha256')
+  with open(filename, 'rb') as fp:
+    for chunk in iter(lambda: fp.read(32768), b''):
+      sha.update(chunk)
+  return sha.hexdigest() + "%3A" + "sha256"
+
 def onFile(filename, name):
+  # First, make sure file isn't already on server
+  hashstr = generateHash(filename)
+  url = cmdline.server + "/document/hash/" + hashstr
+  try:
+    r = requests.get(url)
+  except:
+    logging.exception('Failed to communicate with server "%s"', cmdline.server)
+    return False
+  if r.status_code == 200:
+    logging.debug('"%s" already on server' % name)
+    if not cmdline.upload_existing:
+      return True
+
   url = cmdline.server + "/upload"
   files = {'file' : open(filename, 'rb')}
   try:
@@ -112,6 +133,7 @@ parser.add_argument('--logfile', help="Log to file instead of stdout")
 parser.add_argument('--server', default="http://localhost:7000", help="Which server to send documents to")
 parser.add_argument('--folder', help="Which folder to monitor for files")
 parser.add_argument('--keep', action='store_true', default=False, help="Don't delete the uploaded file from folder")
+parser.add_argument('--upload-existing', action='store_true', default=False, help="Upload existing documents (causes duplicates)")
 parser.add_argument('--delete-invalid', action='store_true', default=False, help="Delete files which the server says it doesn't support")
 parser.add_argument('--debug', action='store_true', default=False, help="Enable additional log messages")
 cmdline = parser.parse_args()

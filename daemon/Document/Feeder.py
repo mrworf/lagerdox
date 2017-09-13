@@ -8,6 +8,7 @@ from Queue import Queue
 import shutil
 import json
 import Analyzer
+import hashlib
 
 class Feeder (threading.Thread):
   def __init__(self, dbconn, basedir, destdir, thumbdir):
@@ -53,11 +54,19 @@ class Feeder (threading.Thread):
       shutil.copy(src, dst)
     self.cleanup(os.path.join(self.basedir, uid))
 
+  def generateHash(self, filename):
+    sha = hashlib.new('sha256')
+    with open(filename, 'rb') as fp:
+      for chunk in iter(lambda: fp.read(32768), b''):
+        sha.update(chunk)
+    return sha.hexdigest() + ":sha256"
+
   def process(self, uid, content, mode, extras):
     # Create a document first so we can feed it the pages
     now = int(time.time())
     fileandpath = self.copyfile(os.path.join(self.basedir, uid, content['file']), content['pagelen'])
-    id = self.dbconn.add_document(0, now, 0, content['pagelen'], fileandpath)
+    hashstr = self.generateHash(os.path.join(self.destdir, fileandpath))
+    id = self.dbconn.add_document(0, now, 0, content['pagelen'], fileandpath, hashstr)
     if id is None:
       logging.error('Unable to add document')
       return
