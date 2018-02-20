@@ -121,6 +121,7 @@ def handleResult(uid, content):
     for doc in content:
       feeder.add(uid, doc, processList[uid]['mode'], processList[uid]['extras'])
   else:
+    logging.error('Failed to process, no content')
     addFailed(processList[uid]['process'].getState())
   del processList[uid]
 
@@ -163,6 +164,8 @@ def documentHome():
 @app.route("/upload/<mode>", methods=['POST'])
 def documentUpload(mode):
   ret = {}
+
+  logging.debug('Hello from upload')
 
   # check if the post request has the file part
   if 'file' not in request.files:

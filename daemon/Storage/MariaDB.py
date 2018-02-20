@@ -564,6 +564,7 @@ class MariaDB:
         result = 'AND (UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) >= UNIX_TIMESTAMP("%s-01-01") AND UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) <= UNIX_TIMESTAMP(LAST_DAY("%s-12-01")))' % (field, '-'.join(start), field, '-'.join(start))
       else:
         result = 'AND (UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) >= UNIX_TIMESTAMP("%s-01-01") AND UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(%s))) <= UNIX_TIMESTAMP(LAST_DAY("%s-12-01")))' % (field, '-'.join(start), field, '-'.join(end))
+    logging.debug("Additional query: " + repr(result))
     return result
 
   def query_all(self, keys):
@@ -598,7 +599,7 @@ class MariaDB:
     if keys['text'] == '' and len(keys['modifier']['include']) == 0 and len(keys['modifier']['exclude']) == 0:
       return Iterator(None, 'No query')
     elif keys['text'] == '':
-      qfield += ', 1.0 AS score'
+      qfield += ', 1 AS score'
     else:
       qfield += ',MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE) AS score' % self.cnx.converter.escape(keys['text'])
       qwhere += 'MATCH (contents.content) AGAINST ("%s" IN BOOLEAN MODE)'  % self.cnx.converter.escape(keys['text'])
@@ -626,6 +627,9 @@ class MariaDB:
       qwhere = qwhere[3:]
 
     query = 'SELECT ' + qfield + ' FROM ' + qtables + ' WHERE ' + qwhere + ' GROUP BY ' + qgroup + ' ORDER BY ' + qorder
+
+    logging.debug("Final query:");
+    print(query)
 
     cursor = self.getCursor(dictionary=True, buffered=True)
     try:

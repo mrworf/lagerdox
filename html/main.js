@@ -95,11 +95,11 @@ $( document ).ready(function() {
   }
 
   function downloadDoc(id) {
-    window.location.href="http://magi.sfo.sensenet.nu:7000/document/" + id + "/download";
+    window.location.href="/document/" + id + "/download";
   }
 
   function viewDoc(id) {
-    window.location.href="http://magi.sfo.sensenet.nu:7000/document/" + id + "/view";
+    window.location.href="/document/" + id + "/view";
   }
 
   function deleteDoc(id, success) {
@@ -327,7 +327,7 @@ $( document ).ready(function() {
   function showUpload() {
     $('#content').empty();
     var comp = Handlebars.getTemplate('upload');
-    $('#content').html(comp({'server':'magi.sfo.sensenet.nu:7000'}));
+    $('#content').html(comp({'server':'lagerdox.sfo.sensenet.nu:7000'}));
     $('#file').fileupload({
       progressall: function (e, data) {
         var progress = parseInt(data.loaded / data.total * 100, 10);

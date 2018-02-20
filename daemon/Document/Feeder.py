@@ -24,16 +24,20 @@ class Feeder (threading.Thread):
     self.start()
 
   def add(self, uid, content, mode, extras=None):
+    logging.debug('Added entry to queue')
     self.queue.put({'uid' : uid, 'content' : content, 'mode' : mode, 'extras' : extras})
 
   def run(self):
     while not self.stop:
       item = self.queue.get()
       logging.info('Processing from queue');
-      if item['content']['type'] == 'import':
-        self.process(item['uid'], item['content'], item['mode'], item['extras'])
-      elif item['content']['type'] == 'thumbnail':
-        self.addthumb(item['uid'], item['content'], item['mode'], item['extras'])
+      try:
+        if item['content']['type'] == 'import':
+          self.process(item['uid'], item['content'], item['mode'], item['extras'])
+        elif item['content']['type'] == 'thumbnail':
+          self.addthumb(item['uid'], item['content'], item['mode'], item['extras'])
+      except:
+        logging.exception('Failed to process entry')
       self.queue.task_done()
 
   def addthumb(self, uid, content, mode, extras):
@@ -47,11 +51,11 @@ class Feeder (threading.Thread):
     for p in content['pages']:
       src = os.path.join(srcpath, 'small%03d.jpg' % p['page'])
       dst = os.path.join(dstpath, 'small%03d.jpg' % p['page'])
-      shutil.copy(src, dst)
+      shutil.copyfile(src, dst)
       src = os.path.join(srcpath, 'large%03d.jpg' % p['page'])
       dst = os.path.join(dstpath, 'large%03d.jpg' % p['page'])
       logging.debug('Copying "%s" => "%s"' % (src, dst))
-      shutil.copy(src, dst)
+      shutil.copyfile(src, dst)
     self.cleanup(os.path.join(self.basedir, uid))
 
   def generateHash(self, filename):
@@ -156,7 +160,7 @@ class Feeder (threading.Thread):
         break
       else:
         c += 1
-    shutil.copy(filename, f)
+    shutil.copyfile(filename, f)
 
     # Next, copy all thumbnails
     dstpath = os.path.join(self.thumbdir, folder, '%s_document%d' % (t, c))
@@ -166,10 +170,10 @@ class Feeder (threading.Thread):
     for p in range(0, pages):
       src = os.path.join(srcpath, 'small%03d.jpg' % p)
       dst = os.path.join(dstpath, 'small%03d.jpg' % p)
-      shutil.copy(src, dst)
+      shutil.copyfile(src, dst)
       src = os.path.join(srcpath, 'large%03d.jpg' % p)
       dst = os.path.join(dstpath, 'large%03d.jpg' % p)
-      shutil.copy(src, dst)
+      shutil.copyfile(src, dst)
 
     return os.path.join(folder, '%s_document%d.pdf' % (t, c))
 
