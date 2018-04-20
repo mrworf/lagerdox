@@ -17,6 +17,7 @@ import logging
 import requests
 import argparse
 import hashlib
+import ConfigParser
 
 class FileMonitor:
   def __init__(self):
@@ -136,6 +137,7 @@ parser.add_argument('--keep', action='store_true', default=False, help="Don't de
 parser.add_argument('--upload-existing', action='store_true', default=False, help="Upload existing documents (causes duplicates)")
 parser.add_argument('--delete-invalid', action='store_true', default=False, help="Delete files which the server says it doesn't support")
 parser.add_argument('--debug', action='store_true', default=False, help="Enable additional log messages")
+parser.add_argument('config', help='Configuration file')
 cmdline = parser.parse_args()
 
 loglevel = logging.INFO
@@ -145,6 +147,29 @@ if cmdline.debug:
 logging.getLogger('').handlers = []
 logging.basicConfig(filename=cmdline.logfile, level=loglevel, format='%(asctime)s - %(filename)s@%(lineno)d - %(levelname)s - %(message)s')
 logging.getLogger("requests").setLevel(logging.ERROR)
+
+config = ConfigParser.ConfigParser()
+config.add_section("general")
+config.set("general", "folder", None)
+config.set("general", "server", "http://localhost:7000")
+config.set("general", "keep", False)
+config.set("general", "upload-existing", False)
+config.set("general", "delete-invalid", False)
+
+if not cmdline.keep:
+	cmdline.keep = config.getboolean("general", "keep")
+if not cmdline.upload_existing:
+	cmdline.upload_existing = config.getboolean("general", "upload-existing")
+if not cmdline.delete_invalid:
+	cmdline.delete_invalid = config.getboolean("general", "delete-invalid")
+if not cmdline.folder:
+	cmdline.folder = config.get("general", "folder")
+if not cmdline.server:
+	cmdline.server = config.get("general", "server")
+
+if cmdline.folder is None:
+	logging.error('You must specify a folder to monitor')
+	sys.exit(1)
 
 mon = FileMonitor()
 mon.monitor(cmdline.folder, onFile)

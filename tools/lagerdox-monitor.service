@@ -1,0 +1,14 @@
+[Unit]
+Description = lagerDOX monitor - Adds documents from a folder
+Requires = lagerdox.service
+After = lagerdox.service
+
+[Service]
+User = lagerdox
+Group = lagerdox
+ExecStart = /opt/lagerdox/extras/monitor.py /etc/lagerdox/monitor.conf
+Type = simple
+Restart = always
+
+[Install]
+WantedBy = multi-user.target
