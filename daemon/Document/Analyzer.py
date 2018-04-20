@@ -63,9 +63,10 @@ class Analyzer:
           bits[1] += bits[2]
           bitsclean[1] += bitsclean[2]
           bits[2] = bits[3]
-          bitsclean[2] = bitsclean[3]
+          if len(bitsclean) == 4:
+            bitsclean[2] = bitsclean[3]
+            del bitsclean[3]
           del bits[3]
-          del bitsclean[3]
         except:
           logging.exception('Failed to remove bits')
           logging.debug('bits = ' + repr(bits))
