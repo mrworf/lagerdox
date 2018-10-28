@@ -9,8 +9,8 @@
     {{/if}}
   </a>
   <div class="document_info">
-    {{#if received}}Dated <a href="?section=search&q=dated:{{donly received}}">{{dtos received}}</a><br>{{/if}}
     {{#if scanned}}Added <a href="?section=search&q=added:{{donly scanned}}">{{dtos scanned}}</a><br>{{/if}}
+    {{#if received}}Dated <a href="?section=search&q=dated:{{donly received}}">{{dtos received}}</a><br>{{/if}}
     {{#if category}}<a href="?section=search&q=catid:{{category.id}}">{{capitalize category.name}}</a><br>{{/if}}
     {{#if tags}}{{#each tags}}{{name}} {{/each}}<br>{{/if}}
     {{#if offline}}DOCUMENT UNAVAILABLE<br>{{/if}}

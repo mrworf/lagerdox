@@ -5,9 +5,10 @@ Wants = network.target
 After = mysql.service network.target
 
 [Service]
-User = lagerdox
-Group = lagerdox
-ExecStart = /opt/lagerdox/daemon/lagerdoxd /etc/lagerdox/lagerdox.conf
+User = ha
+SyslogIdentifier = lagerDOX
+WorkingDirectory = /home/ha/lagerdox/daemon
+ExecStart = /home/ha/lagerdox/daemon/lagerdoxd /home/ha/lagerdox/daemon/lagerdox.conf
 Type = simple
 Restart = always
 

@@ -434,10 +434,21 @@ $( document ).ready(function() {
 
   // Convert date into something useful
   Handlebars.registerHelper('dtos', function(date) {
-    var d = Math.abs(date.getTime() - Date.now())/86400000;
-    if (d <= 1.0) {
-      // Show time instead of date
-      return date.toLocaleTimeString();
+
+    // For this to work, we CANNOT be dealing with time...
+    var o = date; o.setHours(0, 0, 0, 0); o.setHours(-o.getUTCHours());
+    var d = new Date(); d.setHours(0, 0, 0, 0); d.setHours(-d.getUTCHours());
+
+    if (!(o - d)) {
+      return "Today"; //date.toLocaleTimeString();
+    }
+    var t = d; t.setDate(t.getDate()-1);
+    if (!(o - t)) {
+      return "Yesterday"; //date.toLocaleTimeString();
+    }
+    t = d; t.setDate(t.getDate()-7);
+    if (o > t) {
+      return "" + Math.floor((o - d)/86400000)  + " days ago"; //date.toLocaleTimeString();
     }
     return date.toLocaleDateString();
   });

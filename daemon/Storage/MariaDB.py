@@ -592,6 +592,7 @@ class MariaDB:
 
     qorder = """
       score DESC,
+      documents.received DESC,
       documents.id,
       pages.page
     """
@@ -619,6 +620,18 @@ class MariaDB:
           qwhere += 'AND pages.blankness < 200'
         else:
           qwhere += 'AND pages.blankness > 199'
+
+    # Allow changing how we sort
+    if 'order' in keys:
+      if keys['order'] == 'added':
+        qorder = """
+        documents.received DESC,
+        score DESC,
+        documents.id,
+        pages.page
+        """
+
+
 
     # Strip first part to make sure we're a query
     if qwhere.startswith('AND '):
@@ -678,7 +691,8 @@ class MariaDB:
     if sortby:
       query += ' ORDER BY %s' % sortby
     else:
-      query += ' ORDER BY COALESCE(NULLIF(received,0), scanned) DESC, COALESCE(scanned, NULLIF(received,0)) DESC'
+      query += ' ORDER BY COALESCE(scanned, NULLIF(received,0)) DESC'
+#      query += ' ORDER BY COALESCE(NULLIF(received,0), scanned) DESC, COALESCE(scanned, NULLIF(received,0)) DESC'
 
     #logging.debug('Query statement: ' + query)
 

@@ -1,0 +1,14 @@
+[Unit]
+Description = Monitor for lagerDOX
+Requires = lagerdox.service
+
+[Service]
+User = ha
+SyslogIdentifier = lagerMonitor
+WorkingDirectory = /home/ha/lagerdox/tools
+ExecStart = /home/ha/lagerdox/tools/monitor.py --folder /mnt/documents/incoming/
+Type = simple
+Restart = always
+
+[Install]
+WantedBy = multi-user.target
