@@ -17,7 +17,7 @@ import logging
 import requests
 import argparse
 import hashlib
-import ConfigParser
+from ConfigParser import ConfigParser
 
 class FileMonitor:
   def __init__(self):
@@ -148,13 +148,13 @@ logging.getLogger('').handlers = []
 logging.basicConfig(filename=cmdline.logfile, level=loglevel, format='%(asctime)s - %(filename)s@%(lineno)d - %(levelname)s - %(message)s')
 logging.getLogger("requests").setLevel(logging.ERROR)
 
-config = ConfigParser.ConfigParser()
+config = ConfigParser()
 config.add_section("general")
-config.set("general", "folder", None)
+config.set("general", "folder", '')
 config.set("general", "server", "http://localhost:7000")
-config.set("general", "keep", False)
-config.set("general", "upload-existing", False)
-config.set("general", "delete-invalid", False)
+config.set("general", "keep", 'False')
+config.set("general", "upload-existing", 'False')
+config.set("general", "delete-invalid", 'False')
 
 if not cmdline.keep:
 	cmdline.keep = config.getboolean("general", "keep")
@@ -167,8 +167,8 @@ if not cmdline.folder:
 if not cmdline.server:
 	cmdline.server = config.get("general", "server")
 
-if cmdline.folder is None:
-	logging.error('You must specify a folder to monitor')
+if cmdline.folder is None or cmdline.folder == '':
+	logging.error('You must specify a folder to monitor (cannot be blank or left out)')
 	sys.exit(1)
 
 mon = FileMonitor()
